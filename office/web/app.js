@@ -249,6 +249,7 @@ function openAgent(id, tab) {
   renderPanel();
 }
 function openPanel(kind) {
+  $("panel").classList.remove("full");
   state.selected = null;
   state.panel = kind;
   state.office?.select(null);

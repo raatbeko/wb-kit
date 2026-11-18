@@ -1110,9 +1110,10 @@ export class Office3D {
     const m = this.reduceMotion ? 0.2 : 1;
 
     // Когда никто не работает, ничего не летит и камера стоит — рисуем реже (батарея ноутбука).
+    // «Ждёт решения» и «ошибка» могут висеть часами — для прыгающего «!» хватает редких кадров.
     // Человек крутит камеру — рисуем каждый кадр, иначе вращение дёргается.
     const moving = performance.now() - (this.movedAt ?? 0) < 400;
-    const busy = moving || this.fly || this.flights.length || [...this.people.values()].some((p) => p.status !== "idle" || p.cheerUntil > t);
+    const busy = moving || this.fly || this.flights.length || [...this.people.values()].some((p) => p.status === "working" || p.cheerUntil > t || this.tourState);
     this.skip = (this.skip ?? 0) + 1;
     if (!busy && this.skip % 3 !== 0) {
       this.controls.update();

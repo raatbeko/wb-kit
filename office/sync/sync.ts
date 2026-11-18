@@ -8,7 +8,7 @@ import { createDemoClient } from "../../audit/demo.js";
 import { buildReport } from "../../audit/analyze.js";
 import { WBClient } from "../../mcp/wb/src/client.js";
 import type { OfficeStore, SecretStore } from "../core/ports.js";
-import { buildSnapshot, type Snapshot } from "./snapshot.js";
+import { SNAPSHOT_SCHEMA, buildSnapshot, type Snapshot } from "./snapshot.js";
 
 export interface SyncOptions {
   demo?: boolean;
@@ -59,6 +59,11 @@ async function doSync(store: OfficeStore, secrets: SecretStore, opts: SyncOption
     store.addEvent({ kind: "agent_error", agentId: "analyst", message: `Не получилось обновить данные WB: ${reason}` });
     return { ok: false, reason };
   }
+}
+
+/** Снимок старого формата (до обновления кода офиса) — нужны свежие данные. */
+export function isOutdatedSchema(snapshot: { schema?: number } | undefined): boolean {
+  return Boolean(snapshot) && snapshot!.schema !== SNAPSHOT_SCHEMA;
 }
 
 /** Пора ли обновлять: снимка нет или он старше `maxAgeHours`. */

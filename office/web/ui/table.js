@@ -18,6 +18,28 @@ export const fmt = {
   date: (v) => (v ? new Date(v).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" }) : "—"),
 };
 
+/** 1 строка, 2 строки, 5 строк. */
+export function rowsWord(n) {
+  const a = n % 10;
+  const b = n % 100;
+  return a === 1 && b !== 11 ? "строка" : a >= 2 && a <= 4 && (b < 12 || b > 14) ? "строки" : "строк";
+}
+
+/**
+ * Ячейка CSV для русского Excel. Числовые колонки — числом с запятой (Excel посчитает),
+ * остальные — как в таблице. Текст, начинающийся с = + - @ (например, отзыв покупателя),
+ * Excel выполнил бы как формулу — ставим перед ним апостроф.
+ */
+export function csvCell(v, col, row) {
+  let s;
+  if (typeof v === "number" && (!col || (col.num && !col.csvText))) s = String(v).replace(".", ",");
+  else {
+    s = String((col?.fmt ? col.fmt(v, row) : v) ?? "");
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  }
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
 /**
  * Нарисовать таблицу в `host`. Состояние сортировки и поиска живёт в замыкании,
  * поэтому повторный вызов render с новыми строками не сбрасывает выбор человека.
@@ -48,8 +70,9 @@ export function createTable(host, { columns, rows, sort, title, empty = "Нет 
         const x = a[k];
         const y = b[k];
         // Пустые значения — всегда в конце, в какую сторону ни сортируй.
-        if (x === null || x === undefined) return 1;
-        if (y === null || y === undefined) return -1;
+        const xe = x === null || x === undefined;
+        const ye = y === null || y === undefined;
+        if (xe || ye) return xe === ye ? 0 : xe ? 1 : -1;
         return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "ru")) * st.dir;
       });
     }
@@ -65,7 +88,7 @@ export function createTable(host, { columns, rows, sort, title, empty = "Нет 
       })
       .join("")}</tr>`;
     const r = visible();
-    count.textContent = r.length === st.rows.length ? `${r.length} строк` : `${r.length} из ${st.rows.length}`;
+    count.textContent = r.length === st.rows.length ? `${r.length} ${rowsWord(r.length)}` : `${r.length} из ${st.rows.length}`;
     tbody.innerHTML = r.length
       ? r
           .slice(0, limit)
@@ -96,8 +119,9 @@ export function createTable(host, { columns, rows, sort, title, empty = "Нет 
   });
   host.querySelector(".tbl-csv").addEventListener("click", () => {
     // «;» и BOM — чтобы русский Excel открыл файл двойным щелчком без мастера импорта.
-    const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const lines = [columns.map((c) => cell(c.label)).join(";"), ...visible().map((row) => columns.map((c) => cell(typeof row[c.key] === "number" ? String(row[c.key]).replace(".", ",") : row[c.key])).join(";"))];
+    // Текст, начинающийся с = + - @, Excel выполнит как формулу (а это может быть отзыв покупателя) —
+    // ставим перед ним апостроф. Числа идут как есть, с запятой.
+    const lines = [columns.map((c) => csvCell(c.label)).join(";"), ...visible().map((row) => columns.map((c) => csvCell(row[c.key], c, row)).join(";"))];
     const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);

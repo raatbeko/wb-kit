@@ -19,7 +19,7 @@ import { startDemo } from "../demo/simulator.js";
 import { EnvSecretStore } from "../secrets/env-secrets.js";
 import { SqliteOfficeStore } from "../store/sqlite-store.js";
 import { scanReports } from "../sync/reports-scan.js";
-import { isStale, syncWb } from "../sync/sync.js";
+import { isOutdatedSchema, isStale, syncWb } from "../sync/sync.js";
 import { REPORTS_DIR, createApp } from "./app.js";
 
 const HOST = "127.0.0.1";
@@ -97,12 +97,14 @@ async function main() {
     timers.push(setInterval(scan, 10_000));
 
     if (DEMO) {
-      if (isStale(store.latestSnapshot()?.createdAt, 12)) startSync();
+      const last = store.latestSnapshot();
+      if (isStale(last?.createdAt, 12) || isOutdatedSchema(last?.snapshot)) startSync();
       stopDemo = startDemo(store, () => store.latestSnapshot()?.snapshot);
     } else if (secrets.get("WB_API_TOKEN")) {
       // Данные WB — при старте, если старше 6 часов, и дальше по расписанию.
       const maybeSync = () => {
-        if (isStale(store.latestSnapshot()?.createdAt, SYNC_EVERY_HOURS)) startSync();
+        const last = store.latestSnapshot();
+        if (isStale(last?.createdAt, SYNC_EVERY_HOURS) || isOutdatedSchema(last?.snapshot)) startSync();
       };
       maybeSync();
       timers.push(setInterval(maybeSync, 15 * 60_000));

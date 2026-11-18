@@ -50,7 +50,14 @@ export interface DeskStat {
   tone: "ok" | "warn" | "bad" | "neutral";
 }
 
+/**
+ * Версия формата снимка. Меняется, когда в снимок добавляются поля: офис
+ * при старте видит старую версию и сразу пересобирает данные, а не ждёт 6 часов.
+ */
+export const SNAPSHOT_SCHEMA = 2;
+
 export interface Snapshot {
+  schema: number;
   demo: boolean;
   shop: string | null;
   period: { from: string; to: string; days: number };
@@ -139,6 +146,7 @@ export function buildSnapshot(r: AuditReport): Snapshot {
   const issues: SnapshotIssue[] = r.issues.map((i) => ({ ...i, owner: ISSUE_OWNER[i.id] ?? "director", products: i.products.slice(0, 20) }));
   const d = r.data;
   return {
+    schema: SNAPSHOT_SCHEMA,
     demo: d.demo,
     shop: d.seller.ok ? d.seller.data.tradeMark || d.seller.data.name : null,
     period: d.period,

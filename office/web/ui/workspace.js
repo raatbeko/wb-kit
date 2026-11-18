@@ -87,7 +87,7 @@ export const ROLES = {
       title: "Все проблемы магазина",
       rows: s.issues.map((i) => ({ ...i, priorityLabel: PRIORITY[i.priority], ownerName: STAFF_NAME[i.owner] ?? i.owner, productsCount: i.products.length, prio: { high: 3, medium: 2, low: 1 }[i.priority] })),
       columns: [
-        { key: "prio", label: "Срочность", num: true, fmt: (_v, r) => r.priorityLabel, tone: (r) => ({ high: "bad", medium: "warn" })[r.priority] ?? "" },
+        { key: "prio", label: "Срочность", num: true, csvText: true, fmt: (_v, r) => r.priorityLabel, tone: (r) => ({ high: "bad", medium: "warn" })[r.priority] ?? "" },
         { key: "title", label: "Проблема", wide: true },
         { key: "ownerName", label: "Кто занимается" },
         { key: "impactRub", label: "Потери в неделю", num: true, fmt: fmt.rub },
@@ -175,7 +175,7 @@ export const ROLES = {
     },
     charts: (s) =>
       `<h4>Остатки по складам WB</h4>` +
-      hbars(s.warehouses.map((w) => ({ label: w.name, value: w.quantity })), { unit: "шт" }) +
+      hbars((s.warehouses ?? []).map((w) => ({ label: w.name, value: w.quantity })), { unit: "шт" }) +
       `<h4>Меньше всего дней запаса</h4>` +
       hbars(
         s.products
@@ -301,10 +301,15 @@ export const ROLES = {
   },
 };
 
+/** Должна совпадать с SNAPSHOT_SCHEMA в office/sync/snapshot.ts (проверяет тест). */
+export const SNAPSHOT_SCHEMA = 2;
+
 export const STAFF_NAME = { director: "Директор", finance: "Финансист", analyst: "Аналитик", scout: "Разведчик", reviews: "Отзывы", logist: "Логист", marketer: "Маркетолог", content: "Контент", reports: "Отчётник" };
 
 /** Главный вывод сотрудника — для подсказки в 3D и для монитора. */
 export function headlineFor(agentId, s, ctx) {
+  // Снимок от прошлой версии офиса: в нём нет новых полей — не пугаем «нет категории в ключе».
+  if (s && s.schema !== SNAPSHOT_SCHEMA) return "Обновляю данные под новую версию офиса — минуту…";
   try {
     return ROLES[agentId]?.headline?.(s, ctx) ?? null;
   } catch {
@@ -353,6 +358,7 @@ export function createWorkspace(host, { onOpenProduct, onOpenReport, onAsk, onDe
   let tab = "summary";
   const keys = {};
   let table = null;
+  let tableDef = null;
 
   host.innerHTML = `<header class="ws-head"></header>
     <nav class="ws-tabs" role="tablist">${TABS.map(([id, label]) => `<button type="button" role="tab" data-tab="${id}">${label}</button>`).join("")}</nav>
@@ -388,8 +394,13 @@ export function createWorkspace(host, { onOpenProduct, onOpenReport, onAsk, onDe
       dec.disabled = true;
       onDecide(dec.dataset.approve || dec.dataset.reject, dec.dataset.approve ? "approve" : "reject").finally(() => (dec.disabled = false));
     }
-    const only = e.target.closest(".only-problems");
-    if (only) render(true);
+  });
+  // «Только проблемные»: событие change (а не click по подписи — тогда галочка ещё не переключилась),
+  // и таблица не пересобирается — сортировка и поиск остаются.
+  body.addEventListener("change", (e) => {
+    if (!e.target.matches(".only-problems input") || !table || !tableDef) return;
+    const pids = problemIds(ctx.snapshot, agentId);
+    table.update(e.target.checked ? tableDef.rows.filter((r) => pids.has(r.nmId)) : tableDef.rows);
   });
   body.addEventListener("submit", async (e) => {
     if (!e.target.matches(".ask")) return;
@@ -445,18 +456,23 @@ export function createWorkspace(host, { onOpenProduct, onOpenReport, onAsk, onDe
       .join("")}</ul>`;
   }
 
+  /** Верх диалога — форма вопроса или подсказка. Рисуется один раз на сотрудника (курсор, выделение, Ctrl+Z целы). */
+  function askHtml() {
+    const a = ctx.agent;
+    return ctx.mode.canAsk
+      ? `<form class="ask"><textarea name="q" maxlength="2000" placeholder="Например: ${esc(ctx.example)}" required></textarea>
+         <div class="row"><span class="muted">Ответ появится здесь и в ленте</span><button class="btn primary" type="submit">Спросить</button></div></form>`
+      : `<div class="hint-box">Спросите в Claude Code (в папке набора), например: <b>«${esc(a.title)}, ${esc(ctx.example)}»</b> или командой <b>/office</b>. Здесь будет видно, как сотрудник работает, а его отчёты появятся во вкладке «Отчёты».
+         <div class="muted small">Задавать вопросы прямо отсюда можно с ключом Claude API — см. README.</div></div>`;
+  }
+
+  /** Низ диалога — вопросы с ответами и последние шаги: меняются на каждый шаг сотрудника. */
   function dialogHtml() {
     const a = ctx.agent;
     const tasks = ctx.tasks.filter((t) => t.agentId === a.id).slice(0, 10);
     const reportById = new Map(ctx.reports.map((r) => [r.id, r]));
     const steps = ctx.events.filter((e) => e.agentId === a.id).slice(-12).reverse();
-    const ask = ctx.mode.canAsk
-      ? `<form class="ask"><textarea name="q" maxlength="2000" placeholder="Например: ${esc(ctx.example)}" required></textarea>
-         <div class="row"><span class="muted">Ответ появится здесь и в ленте</span><button class="btn primary" type="submit">Спросить</button></div></form>`
-      : `<div class="hint-box">Спросите в Claude Code (в папке набора), например: <b>«${esc(a.title)}, ${esc(ctx.example)}»</b> или командой <b>/office</b>. Здесь будет видно, как сотрудник работает, а его отчёты появятся во вкладке «Отчёты».
-         <div class="muted small">Задавать вопросы прямо отсюда можно с ключом Claude API — см. README.</div></div>`;
-    return `${ask}
-      ${tasks.length ? `<h3>Вопросы и ответы</h3>${tasks.map((t) => {
+    return `${tasks.length ? `<h3>Вопросы и ответы</h3>${tasks.map((t) => {
         const ans = t.resultReportId ? reportById.get(t.resultReportId)?.summary?.text : null;
         return `<div class="qa"><div class="q">${esc(t.question)}</div>${ans ? `<div class="answer">${esc(ans)}</div>` : `<div class="muted">${esc({ queued: "в очереди", running: "работает…", failed: "не получилось", cancelled: "отменено", done: "готово" }[t.status] ?? t.status)}</div>`}</div>`;
       }).join("")}` : ""}
@@ -494,6 +510,7 @@ export function createWorkspace(host, { onOpenProduct, onOpenReport, onAsk, onDe
       const only = onlyBox?.checked ?? false;
       if (keys.body !== k || force || !table) {
         keys.body = k;
+        tableDef = def;
         const pids = problemIds(s, agentId);
         const productTable = def.product !== false && !def.noSnapshot;
         if (!s && !def.noSnapshot) {
@@ -513,18 +530,17 @@ export function createWorkspace(host, { onOpenProduct, onOpenReport, onAsk, onDe
         body.innerHTML = reportsHtml();
       }
     } else {
-      const k = JSON.stringify([agentId, ctx.mode.canAsk, ctx.tasks.filter((t) => t.agentId === agentId), ctx.events.filter((e) => e.agentId === agentId).slice(-12).map((e) => e.seq), ctx.reports.length]);
-      if (keys.body !== k) {
-        keys.body = k;
-        // Набранный вопрос не теряем при обновлении.
-        const ta = body.querySelector("textarea");
-        const keep = ta ? { v: ta.value, f: document.activeElement === ta } : null;
-        body.innerHTML = dialogHtml();
-        const n = body.querySelector("textarea");
-        if (keep && n) {
-          n.value = keep.v;
-          if (keep.f) n.focus();
-        }
+      // Форма — один раз на сотрудника и режим; списки — отдельно, при каждом новом шаге.
+      const top = JSON.stringify([agentId, ctx.mode.canAsk]);
+      if (keys.body !== top) {
+        keys.body = top;
+        keys.dialog = null;
+        body.innerHTML = `${askHtml()}<div class="dialog-list"></div>`;
+      }
+      const k = JSON.stringify([ctx.tasks.filter((t) => t.agentId === agentId), ctx.events.filter((e) => e.agentId === agentId).slice(-12).map((e) => e.seq), ctx.reports.length]);
+      if (keys.dialog !== k) {
+        keys.dialog = k;
+        body.querySelector(".dialog-list").innerHTML = dialogHtml();
       }
     }
   }

@@ -54,7 +54,7 @@ export function barChart(points, { title, unit = "₽", height = 160 } = {}) {
 export function hbars(items, { unit = "", max: maxIn, limit = 8 } = {}) {
   if (!items.length) return `<p class="muted">Нет данных</p>`;
   const list = items.slice(0, limit);
-  const max = maxIn ?? Math.max(...list.map((i) => i.value), 1);
+  const max = Math.max(maxIn ?? 0, ...list.map((i) => i.value), 1);
   return `<div class="hbars">${list
     .map(
       (i) => `<div class="hbar" title="${esc(i.label)}: ${esc(nf.format(Math.round(i.value)))}${unit ? " " + esc(unit) : ""}">

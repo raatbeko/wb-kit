@@ -8,13 +8,14 @@ import { buildReport } from "../audit/analyze.js";
 import { collectAudit } from "../audit/collect.js";
 import { createDemoClient } from "../audit/demo.js";
 import { STAFF } from "./core/staff.js";
-import { buildSnapshot, type Snapshot } from "./sync/snapshot.js";
+import { SNAPSHOT_SCHEMA, buildSnapshot, type Snapshot } from "./sync/snapshot.js";
+import { isOutdatedSchema } from "./sync/sync.js";
 // @ts-expect-error — фронт на чистом JS без типов
-import { ROLES, headlineFor, productCardHtml } from "./web/ui/workspace.js";
+import { ROLES, SNAPSHOT_SCHEMA as WEB_SCHEMA, headlineFor, productCardHtml } from "./web/ui/workspace.js";
 // @ts-expect-error — фронт на чистом JS без типов
 import { barChart, hbars } from "./web/ui/chart.js";
 // @ts-expect-error — фронт на чистом JS без типов
-import { esc, fmt } from "./web/ui/table.js";
+import { csvCell, esc, fmt } from "./web/ui/table.js";
 
 let s: Snapshot;
 const ctx = { reports: [{ id: "r1", kind: "competitors", title: "Конкуренты — 18.11.2026", agentId: "scout", createdAt: new Date().toISOString(), path: "reports/x/a.html", summary: null }] };
@@ -80,7 +81,25 @@ describe("карточка товара и графики", () => {
     expect(html).not.toContain("<img");
   });
 
+  it("CSV: формула из отзыва покупателя не выполнится в Excel, числа остаются числами", () => {
+    expect(csvCell('=HYPERLINK("http://x";"y")', { key: "text" })).toBe(`"'=HYPERLINK(""http://x"";""y"")"`);
+    expect(csvCell("+7 999", { key: "text" })).toBe(`"'+7 999"`);
+    expect(csvCell("@cmd", { key: "text" })).toBe(`"'@cmd"`);
+    expect(csvCell(-5.2, { key: "d", num: true })).toBe(`"-5,2"`);
+    expect(csvCell(3, { key: "prio", num: true, csvText: true, fmt: () => "срочно" })).toBe(`"срочно"`);
+    expect(csvCell("Плед", { key: "title" })).toBe(`"Плед"`);
+  });
+
+  it("версия снимка во фронте совпадает с сервером; старый снимок — «обновляю», а не «нет категории»", () => {
+    expect(WEB_SCHEMA).toBe(SNAPSHOT_SCHEMA);
+    const old = { ...s, schema: undefined, finance: undefined };
+    expect(headlineFor("finance", old, ctx)).toMatch(/Обновляю данные/);
+    expect(isOutdatedSchema(old as never)).toBe(true);
+    expect(isOutdatedSchema(s)).toBe(false);
+  });
+
   it("графики экранируют подписи и не ломаются на пустых данных", () => {
+    expect(hbars([{ label: "x", value: 0 }], { max: 0 })).not.toContain("NaN");
     expect(barChart([], {})).toContain("Нет данных");
     expect(barChart([{ label: "<b>", value: 5 }], { title: "x" })).not.toContain("<b>");
     expect(hbars([{ label: "<script>", value: 1 }])).not.toContain("<script>");
