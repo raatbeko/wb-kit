@@ -19,3 +19,5 @@ Copyright (c) 2026 theYahia. Текст лицензии: [`mcp/wb/LICENSE-theYa
 ## mpstats-io/claude-code-skills — MIT
 
 https://github.com/mpstats-io/claude-code-skills. Из скрипта `wb-card-content.sh` взята таблица серверов CDN WB по диапазонам артикулов (`competitors/cdn.ts`, `BASKET_RANGES`). Для новых артикулов wb-kit дополняет её своими опорными точками.
+
+Навыки `mpstats` и `photo-editor` из того же репозитория (коммит `1ef970e`, 2026-05-27) лежат в `.claude/skills/` с их лицензией. Изменено в wb-kit: `scripts/common.sh` обоих навыков дополнительно читают токен из корневого `.env`; photo-editor сохраняет результаты в `reports/photo-editor`; в `SKILL.md` добавлена заметка, где хранится токен.

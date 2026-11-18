@@ -13,3 +13,5 @@ node_modules/
 .claude/settings.local.json
 *.log
 .DS_Store
+# Токены навыков MPSTATS (в wb-kit токен лежит в корневом .env)
+.claude/skills/*/config/.env

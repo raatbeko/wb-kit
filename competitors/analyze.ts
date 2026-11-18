@@ -42,6 +42,14 @@ export interface CompetitorInput {
   details: Record<string, CardDetails>;
   /** Прошлый снимок по тем же запросам — для «что изменилось». */
   previous: SearchSnapshot[];
+  /** Продажи по MPSTATS (если у продавца есть токен): заполняет Claude в mpstats.json. */
+  sales?: SalesData;
+}
+
+export interface SalesData {
+  source: string;
+  period: { from: string; to: string };
+  items: Record<string, { sales: number; revenue: number }>;
 }
 
 export const LEADERS = 10;
@@ -96,6 +104,8 @@ export interface QueryReport {
   price: { min: number | null; p25: number | null; median: number | null; p75: number | null; max: number | null; leadersMedian: number | null };
   leadersRatingMedian: number | null;
   leadersReviewsMedian: number | null;
+  /** Медиана продаж первой десятки за период MPSTATS, шт. */
+  leadersSalesMedian: number | null;
   promoShare: number;
   brands: { brand: string; cards: number; bestPosition: number }[];
   leaders: (SearchCard & { details: CardDetails | null })[];
@@ -144,6 +154,7 @@ export function analyzeQuery(s: SearchSnapshot, input: CompetitorInput): QueryRe
     },
     leadersRatingMedian: med(leaders.map((c) => c.rating)),
     leadersReviewsMedian: medInt(leaders.map((c) => c.reviews)),
+    leadersSalesMedian: input.sales ? medInt(leaders.map((c) => input.sales!.items[String(c.nmId)]?.sales)) : null,
     promoShare: cards.length ? Math.round((cards.filter((c) => c.labels.length > 0).length / cards.length) * 100) : 0,
     brands: brandsOf(cards),
     leaders: leaders.map((c) => ({ ...c, details: det(c.nmId) })),
@@ -202,6 +213,10 @@ export function analyzeQuery(s: SearchSnapshot, input: CompetitorInput): QueryRe
       gaps.push(`характеристик ${d.characteristics} — у лидеров ${L.characteristics}`);
     }
     if (d && !d.hasVideo && (L.videoShare ?? 0) >= 50) gaps.push(`нет видео — у ${L.videoShare}% лидеров оно есть`);
+    const ownSales = input.sales?.items[String(o.nmId)];
+    if (ownSales && report.leadersSalesMedian && ownSales.sales < report.leadersSalesMedian * 0.3) {
+      gaps.push(`продаж ${ownSales.sales} шт за период — у лидеров около ${report.leadersSalesMedian} (MPSTATS)`);
+    }
     if (card && card.labels.length === 0 && report.promoShare >= 50) gaps.push(`не участвует в акции, а в выдаче в акции ${report.promoShare}% карточек`);
     report.own.push({
       nmId: o.nmId,
@@ -252,6 +267,7 @@ export function competitorSummary(r: CompetitorReport) {
   return {
     demo: r.input.demo,
     generatedAt: r.input.generatedAt,
+    salesSource: r.input.sales ? { source: r.input.sales.source, period: r.input.sales.period } : null,
     findings: r.findings,
     queries: r.queries.map((q) => ({
       query: q.query,
@@ -261,9 +277,10 @@ export function competitorSummary(r: CompetitorReport) {
       leadersReviewsMedian: q.leadersReviewsMedian,
       promoShare: q.promoShare,
       brands: q.brands.slice(0, 5),
-      leaders: q.leaders.map((c) => ({ position: c.position, nmId: c.nmId, brand: c.brand, name: c.name, price: c.price, rating: c.rating, reviews: c.reviews, labels: c.labels, photos: c.details?.photos, descriptionLength: c.details?.descriptionLength })),
+      leaders: q.leaders.map((c) => ({ position: c.position, nmId: c.nmId, brand: c.brand, name: c.name, price: c.price, rating: c.rating, reviews: c.reviews, labels: c.labels, photos: c.details?.photos, descriptionLength: c.details?.descriptionLength, sales: r.input.sales?.items[String(c.nmId)]?.sales, revenue: r.input.sales?.items[String(c.nmId)]?.revenue })),
+      leadersSalesMedian: q.leadersSalesMedian,
       leadersDetails: q.leadersDetails,
-      own: q.own.map((o) => ({ nmId: o.nmId, vendorCode: o.vendorCode, title: o.title, position: o.position, prevPosition: o.prevPosition, price: o.card?.price ?? null, rating: o.card?.rating ?? null, reviews: o.card?.reviews ?? null, gaps: o.gaps })),
+      own: q.own.map((o) => ({ nmId: o.nmId, vendorCode: o.vendorCode, title: o.title, position: o.position, prevPosition: o.prevPosition, price: o.card?.price ?? null, rating: o.card?.rating ?? null, reviews: o.card?.reviews ?? null, sales: r.input.sales?.items[String(o.nmId)]?.sales ?? null, revenue: r.input.sales?.items[String(o.nmId)]?.revenue ?? null, gaps: o.gaps })),
       changes: q.changes,
     })),
   };

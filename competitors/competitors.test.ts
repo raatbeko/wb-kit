@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import ExcelJS from "exceljs";
@@ -7,7 +7,7 @@ import { demoCompetitorInput } from "./demo.js";
 import { buildCompetitorReport, competitorSummary, quantile, type SearchSnapshot } from "./analyze.js";
 import { CardFetcher, cardUrl, guessBasket, parseCard } from "./cdn.js";
 import { renderCompetitorHtml, renderCompetitorXlsx } from "./render.js";
-import { previousFor, validateSnapshot } from "../scripts/competitors.js";
+import { previousFor, readSales, validateSnapshot } from "../scripts/competitors.js";
 
 const NOW = new Date("2026-11-18T12:00:00Z");
 const report = buildCompetitorReport(demoCompetitorInput(NOW));
@@ -113,5 +113,36 @@ describe("снимки и история", () => {
   it("квантили", () => {
     expect(quantile([1, 2, 3, 4, 5], 0.5)).toBe(3);
     expect(quantile([], 0.5)).toBeNull();
+  });
+});
+
+describe("продажи из MPSTATS", () => {
+  it("на демо: медиана продаж лидеров и отставание слабой кружки", () => {
+    const mugQuery = q("кружка керамическая");
+    expect(mugQuery.leadersSalesMedian).toBeGreaterThan(100);
+    const mug = mugQuery.own.find((o) => o.vendorCode === "MUG-CERAMIC-400")!;
+    expect(mug.gaps.join(" | ")).toMatch(/продаж 40 шт за период — у лидеров около \d+/);
+    expect(competitorSummary(report).salesSource?.source).toBe("MPSTATS (демо)");
+  });
+
+  it("без MPSTATS — ни медианы, ни выдуманных продаж", () => {
+    const { sales: _, ...input } = demoCompetitorInput(NOW);
+    const r = buildCompetitorReport(input);
+    expect(r.queries.every((x) => x.leadersSalesMedian === null)).toBe(true);
+    expect(r.queries.flatMap((x) => x.own.flatMap((o) => o.gaps)).some((g) => g.includes("продаж"))).toBe(false);
+    expect(competitorSummary(r).salesSource).toBeNull();
+  });
+
+  it("mpstats.json: нет файла — пусто, кривая строка — понятная ошибка", () => {
+    const dir = mkdtempSync(join(tmpdir(), "wbkit-sales-"));
+    expect(readSales(join(dir, "mpstats.json"))).toBeUndefined();
+    const ok = join(dir, "ok.json");
+    writeFileSync(ok, JSON.stringify({ source: "MPSTATS", period: { from: "2026-10-18", to: "2026-11-17" }, items: [{ nmId: 123, sales: "45", revenue: 9000 }] }));
+    expect(readSales(ok)).toEqual({ source: "MPSTATS", period: { from: "2026-10-18", to: "2026-11-17" }, items: { "123": { sales: 45, revenue: 9000 } } });
+    const bad = join(dir, "bad.json");
+    writeFileSync(bad, JSON.stringify({ items: [{ nmId: 123, sales: "много" }] }));
+    expect(() => readSales(bad)).toThrow(/должны быть числами/);
+    writeFileSync(bad, JSON.stringify({ data: [] }));
+    expect(() => readSales(bad)).toThrow(/массив items/);
   });
 });

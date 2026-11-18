@@ -78,6 +78,28 @@ export function parseCard(nmId: number, j: Record<string, unknown>): CardDetails
   };
 }
 
+/** Текст карточки с CDN: название, описание, характеристики (по группам и без). */
+export function parseCardText(nmId: number, j: Record<string, unknown>) {
+  const media = (j["media"] ?? {}) as Record<string, unknown>;
+  const chars = new Map<string, { name: string; value: string }>();
+  const add = (o: unknown) => {
+    const x = o as { name?: unknown; value?: unknown };
+    if (x && typeof x.name === "string" && x.value !== undefined && x.value !== null) chars.set(x.name, { name: x.name, value: String(x.value) });
+  };
+  for (const o of Array.isArray(j["options"]) ? (j["options"] as unknown[]) : []) add(o);
+  for (const g of Array.isArray(j["grouped_options"]) ? (j["grouped_options"] as { options?: unknown[] }[]) : []) for (const o of g.options ?? []) add(o);
+  return {
+    nmId,
+    vendorCode: typeof j["vendor_code"] === "string" ? (j["vendor_code"] as string) : undefined,
+    subject: String(j["subj_name"] ?? ""),
+    title: String(j["imt_name"] ?? ""),
+    description: String(j["description"] ?? ""),
+    characteristics: [...chars.values()],
+    photos: Number(media["photo_count"] ?? 0),
+    hasVideo: Boolean(media["has_video"]),
+  };
+}
+
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 
 export class CardFetcher {
@@ -108,6 +130,12 @@ export class CardFetcher {
   }
 
   async get(nmId: number): Promise<CardDetails | null> {
+    const j = await this.getRaw(nmId);
+    return j ? parseCard(nmId, j) : null;
+  }
+
+  /** card.json целиком — для разбора текста карточки (`/card`). */
+  async getRaw(nmId: number): Promise<Record<string, unknown> | null> {
     const vol = Math.floor(nmId / 100_000);
     const first = this.volCache.get(vol) ?? guessBasket(nmId);
     // Если таблица устарела, нужный сервер обычно рядом с угаданным — перебираем от ближних,
@@ -119,7 +147,7 @@ export class CardFetcher {
       const j = await this.tryBasket(nmId, b);
       if (j) {
         this.volCache.set(vol, b);
-        return parseCard(nmId, j);
+        return j;
       }
     }
     return null;

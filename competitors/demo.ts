@@ -122,6 +122,20 @@ export function demoCompetitorInput(now = new Date()): CompetitorInput {
   const weekAgo = new Date(now.getTime() - 7 * 86_400_000).toISOString();
   const own: OwnProduct[] = DEMO_PRODUCTS.map((p) => ({ nmId: p.nmId, vendorCode: p.vendorCode, title: p.title }));
   const snapshots = SPECS.map((s) => snapshot(s, scannedAt, false));
+  // Продажи «как из MPSTATS»: у лидеров сотни штук, у слабой кружки — несколько десятков.
+  const items: Record<string, { sales: number; revenue: number }> = {};
+  for (const sn of snapshots) {
+    for (const c of sn.cards.slice(0, 10)) {
+      const n = Math.round(3000 / (c.position + 2));
+      items[String(c.nmId)] = { sales: n, revenue: n * (c.price ?? 0) };
+    }
+    for (const o of SPECS.find((x) => x.query === sn.query)!.own) {
+      if (!o.position) continue;
+      const n = o.nmId === 201450005 ? 40 : 420;
+      items[String(o.nmId)] = { sales: n, revenue: n * o.price };
+    }
+  }
+  const from = new Date(now.getTime() - 30 * 86_400_000).toISOString().slice(0, 10);
   return {
     generatedAt: scannedAt,
     demo: true,
@@ -129,5 +143,6 @@ export function demoCompetitorInput(now = new Date()): CompetitorInput {
     own,
     details: details(snapshots, own),
     previous: SPECS.map((s) => snapshot(s, weekAgo, true)),
+    sales: { source: "MPSTATS (демо)", period: { from, to: scannedAt.slice(0, 10) }, items },
   };
 }

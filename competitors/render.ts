@@ -3,7 +3,7 @@
  */
 import ExcelJS from "exceljs";
 import { BASE_CSS, esc, fmt, markdownToHtml, rub } from "../audit/render-html.js";
-import type { CompetitorReport, QueryReport, SearchCard } from "./analyze.js";
+import type { CompetitorReport, QueryReport, SalesData, SearchCard } from "./analyze.js";
 
 const PRIORITY = { high: "Срочно", medium: "Важно", low: "К сведению" } as const;
 const productUrl = (nmId: number) => `https://www.wildberries.ru/catalog/${nmId}/detail.aspx`;
@@ -41,7 +41,8 @@ function priceStrip(q: QueryReport, cards: SearchCard[]): string {
 <div class="legend"><span><i class="sw leader"></i>первая десятка</span><span><i class="sw other"></i>остальные</span><span><i class="sw band-sw"></i>средние 50% цен</span></div>`;
 }
 
-function querySection(q: QueryReport, cards: SearchCard[]): string {
+function querySection(q: QueryReport, cards: SearchCard[], salesData?: SalesData): string {
+  const sales = (id: number) => salesData?.items[String(id)];
   const tile = (label: string, value: string, hint = "") => `<div class="kpi"><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div><div class="kpi-foot"><span>${hint}</span></div></div>`;
   const own = q.own.length
     ? q.own
@@ -53,7 +54,7 @@ function querySection(q: QueryReport, cards: SearchCard[]): string {
           return `<article class="issue ${o.position === null || o.position > 30 ? "high" : o.gaps.length ? "medium" : "low"}">
 <div class="issue-head"><b>${esc(o.vendorCode || o.nmId)}</b><span class="muted">${esc(o.title)}</span></div>
 <h3>${o.position === null ? `Нет в первых ${q.scanned}` : `Место ${o.position}`} ${move}</h3>
-${o.card ? `<p class="muted">${rub(o.card.price)} · рейтинг ${fmt(o.card.rating, 1)} · отзывов ${fmt(o.card.reviews)}</p>` : ""}
+${o.card ? `<p class="muted">${rub(o.card.price)} · рейтинг ${fmt(o.card.rating, 1)} · отзывов ${fmt(o.card.reviews)}${sales(o.nmId) ? ` · продаж ${fmt(sales(o.nmId)!.sales)} шт на ${rub(sales(o.nmId)!.revenue)}` : ""}</p>` : ""}
 ${o.gaps.length ? `<ul class="products">${o.gaps.map((g) => `<li>${esc(g)}</li>`).join("")}</ul>` : "<p>По основным признакам не уступает лидерам.</p>"}
 </article>`;
         })
@@ -63,7 +64,7 @@ ${o.gaps.length ? `<ul class="products">${o.gaps.map((g) => `<li>${esc(g)}</li>`
   const leaders = q.leaders
     .map(
       (c) => `<tr><td class="c">${c.position}</td><td><a href="${productUrl(c.nmId)}" target="_blank" rel="noopener">${esc(c.brand ?? "—")}</a><div class="muted small">${esc(c.name)} · ${c.nmId}</div></td>
-<td class="r">${rub(c.price)}</td><td class="r">${fmt(c.rating, 1)}</td><td class="r">${fmt(c.reviews)}</td>
+<td class="r">${rub(c.price)}</td><td class="r">${fmt(c.rating, 1)}</td><td class="r">${fmt(c.reviews)}</td>${salesData ? `<td class="r">${fmt(sales(c.nmId)?.sales)}</td><td class="r">${rub(sales(c.nmId)?.revenue)}</td>` : ""}
 <td class="r">${fmt(c.details?.photos)}</td><td class="r">${fmt(c.details?.descriptionLength)}</td><td class="r">${fmt(c.details?.characteristics)}</td><td>${c.labels.map((l) => `<span class="chip low">${esc(l)}</span>`).join(" ")}</td></tr>`,
     )
     .join("");
@@ -76,11 +77,12 @@ ${tile("Цены в выдаче", `${rub(q.price.p25)} – ${rub(q.price.p75)}`
 ${tile("Рейтинг лидеров", fmt(q.leadersRatingMedian, 1), "медиана")}
 ${tile("Отзывов у лидеров", fmt(q.leadersReviewsMedian), "медиана")}
 ${tile("В акции", `${q.promoShare}%`, "карточек с плашкой акции")}
+${salesData && q.leadersSalesMedian !== null ? tile("Продажи лидеров", `${fmt(q.leadersSalesMedian)} шт`, `медиана, ${esc(salesData.source)}`) : ""}
 </div>
 ${priceStrip(q, cards)}
 <h3>Ваши товары</h3>${own}
 <h3>Первая десятка</h3>
-<div class="table-wrap"><table><thead><tr><th>Место</th><th>Бренд и товар</th><th class="r">Цена</th><th class="r">Рейтинг</th><th class="r">Отзывов</th><th class="r">Фото</th><th class="r">Описание, симв.</th><th class="r">Характ.</th><th>Плашки</th></tr></thead><tbody>${leaders}</tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>Место</th><th>Бренд и товар</th><th class="r">Цена</th><th class="r">Рейтинг</th><th class="r">Отзывов</th>${salesData ? `<th class="r">Продажи, шт</th><th class="r">Выручка</th>` : ""}<th class="r">Фото</th><th class="r">Описание, симв.</th><th class="r">Характ.</th><th>Плашки</th></tr></thead><tbody>${leaders}</tbody></table></div>
 <p class="note">Бренды в выдаче: ${q.brands.slice(0, 6).map((b) => `${esc(b.brand)} — ${b.cards} (лучшее место ${b.bestPosition})`).join(", ")}.</p>
 ${q.changes.hasPrevious && (q.changes.newLeaders.length || q.changes.leaderPriceChanges.length) ? `<p class="note">С прошлой проверки: ${[q.changes.newLeaders.length ? `новых в первой десятке — ${q.changes.newLeaders.length}` : "", ...q.changes.leaderPriceChanges.map((c) => `${esc(c.brand ?? c.nmId)}: ${rub(c.was)} → ${rub(c.now)}`)].filter(Boolean).join("; ")}.</p>` : ""}
 </section>`;
@@ -106,8 +108,8 @@ a{color:var(--accent)}
 <header><div><h1>Конкуренты на WB${r.input.demo ? '<span class="badge">ДЕМО</span>' : ""}</h1><div class="sub">Запросы: ${r.queries.map((q) => `«${esc(q.query)}»`).join(", ")}</div></div><div class="sub">Проверено ${esc(date)}</div></header>
 ${insightsMd?.trim() ? `<section class="insights"><h2>Главное</h2>${markdownToHtml(insightsMd)}</section>` : ""}
 <section><h2>Что важно</h2>${findings}</section>
-${r.queries.map((q) => querySection(q, snaps.get(q.query) ?? [])).join("\n")}
-<footer>${r.input.demo ? "Демо-отчёт на выдуманных данных. " : ""}Выдача снята со страницы поиска WB так, как её видел покупатель в момент проверки. Позиции зависят от региона доставки и истории покупателя, поэтому у разных людей немного отличаются. Описания карточек — из открытых данных WB.</footer>
+${r.queries.map((q) => querySection(q, snaps.get(q.query) ?? [], r.input.sales)).join("\n")}
+<footer>${r.input.demo ? "Демо-отчёт на выдуманных данных. " : ""}Выдача снята со страницы поиска WB так, как её видел покупатель в момент проверки. Позиции зависят от региона доставки и истории покупателя, поэтому у разных людей немного отличаются. Описания карточек — из открытых данных WB.${r.input.sales ? ` Продажи — ${esc(r.input.sales.source)} за ${esc(r.input.sales.period.from)} — ${esc(r.input.sales.period.to)}.` : ""}</footer>
 </div></body></html>`;
 }
 
@@ -143,17 +145,19 @@ export async function renderCompetitorXlsx(r: CompetitorReport, file: string): P
     { header: "Цена до скидки", key: "oldPrice", width: 12, style: { numFmt: '#,##0" ₽"' } }, { header: "Рейтинг", key: "rating", width: 8 }, { header: "Отзывов", key: "reviews", width: 9 },
     { header: "Доставка", key: "delivery", width: 12 }, { header: "Плашки", key: "labels", width: 20 }, { header: "Мой товар", key: "mine", width: 10 },
     { header: "Фото", key: "photos", width: 7 }, { header: "Описание, симв.", key: "descriptionLength", width: 11 }, { header: "Характеристик", key: "characteristics", width: 11 },
+    { header: "Продажи, шт (MPSTATS)", key: "sales", width: 12 }, { header: "Выручка (MPSTATS)", key: "revenue", width: 14, style: { numFmt: '#,##0" ₽"' } },
     { header: "Ссылка", key: "url", width: 50 },
   ];
   const ownIds = new Set(r.input.own.map((o) => o.nmId));
   for (const s of r.input.snapshots) {
     for (const c of s.cards) {
       const d = r.input.details[String(c.nmId)];
-      all.addRow({ query: s.query, ...c, labels: c.labels.join(", "), mine: ownIds.has(c.nmId) ? "да" : "", photos: d?.photos, descriptionLength: d?.descriptionLength, characteristics: d?.characteristics, url: productUrl(c.nmId) });
+      const sl = r.input.sales?.items[String(c.nmId)];
+      all.addRow({ query: s.query, ...c, labels: c.labels.join(", "), mine: ownIds.has(c.nmId) ? "да" : "", photos: d?.photos, descriptionLength: d?.descriptionLength, characteristics: d?.characteristics, sales: sl?.sales, revenue: sl?.revenue, url: productUrl(c.nmId) });
     }
   }
   head(all);
-  all.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 16 } };
+  all.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: all.columnCount } };
 
   await wb.xlsx.writeFile(file);
 }

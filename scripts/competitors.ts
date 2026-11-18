@@ -15,7 +15,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, write
 import { join, relative, resolve } from "node:path";
 import { HOSTS, WBClient } from "../mcp/wb/src/client.js";
 import { ROOT, loadEnv, readKey } from "../mcp/wb/src/env.js";
-import { buildCompetitorReport, competitorSummary, LEADERS, type CompetitorInput, type OwnProduct, type SearchCard, type SearchSnapshot } from "../competitors/analyze.js";
+import { buildCompetitorReport, competitorSummary, LEADERS, type CompetitorInput, type OwnProduct, type SalesData, type SearchCard, type SearchSnapshot } from "../competitors/analyze.js";
 import { CardFetcher, type CardDetails } from "../competitors/cdn.js";
 import { demoCompetitorInput } from "../competitors/demo.js";
 import { renderCompetitorHtml, renderCompetitorXlsx } from "../competitors/render.js";
@@ -127,7 +127,31 @@ async function fetchDetails(snaps: SearchSnapshot[], own: OwnProduct[]): Promise
   return out;
 }
 
+/**
+ * Продажи MPSTATS кладёт Claude в mpstats.json (формат ответа MPSTATS он разбирает сам):
+ * { "source": "MPSTATS", "period": { "from": "ГГГГ-ММ-ДД", "to": "ГГГГ-ММ-ДД" },
+ *   "items": [ { "nmId": 123, "sales": 456, "revenue": 789000 } ] }
+ */
+export function readSales(file: string): SalesData | undefined {
+  if (!existsSync(file)) return undefined;
+  const raw = JSON.parse(readFileSync(file, "utf8")) as { source?: string; period?: { from?: string; to?: string }; items?: unknown[] };
+  if (!Array.isArray(raw.items)) throw new Error(`${file}: нужен массив items с полями nmId, sales, revenue`);
+  const items: SalesData["items"] = {};
+  for (const it of raw.items as Record<string, unknown>[]) {
+    const nmId = Number(it["nmId"]);
+    const sales = Number(it["sales"]);
+    const revenue = Number(it["revenue"]);
+    if (!Number.isInteger(nmId) || !Number.isFinite(sales) || !Number.isFinite(revenue)) {
+      throw new Error(`${file}: строка ${JSON.stringify(it)} — nmId, sales и revenue должны быть числами`);
+    }
+    items[String(nmId)] = { sales, revenue };
+  }
+  return { source: raw.source ?? "MPSTATS", period: { from: raw.period?.from ?? "?", to: raw.period?.to ?? "?" }, items };
+}
+
 async function render(dir: string, input: CompetitorInput) {
+  const sales = readSales(join(dir, "mpstats.json"));
+  if (sales) input = { ...input, sales };
   const report = buildCompetitorReport(input);
   const insightsPath = join(dir, "insights.md");
   const insights = existsSync(insightsPath) ? readFileSync(insightsPath, "utf8") : undefined;
