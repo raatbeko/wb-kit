@@ -115,3 +115,15 @@ describe("офис агентов (.claude/agents)", () => {
     );
   });
 });
+
+describe(".env от клиента", () => {
+  it("BOM от Блокнота, CRLF, кавычки и «Bearer» не ломают ключ", async () => {
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { loadEnv, readKey } = await import("../mcp/wb/src/env.js");
+    const file = join(mkdtempSync(join(tmpdir(), "wbkit-env-")), ".env");
+    writeFileSync(file, "﻿WBKIT_TEST_A=abc.def\r\nWBKIT_TEST_B=«xyz»\r\nWBKIT_TEST_C=Bearer tok\r\nWBKIT_TEST_D=your_token_here\r\n");
+    loadEnv(file);
+    expect([readKey("WBKIT_TEST_A"), readKey("WBKIT_TEST_B"), readKey("WBKIT_TEST_C"), readKey("WBKIT_TEST_D")]).toEqual(["abc.def", "xyz", "tok", undefined]);
+  });
+});
