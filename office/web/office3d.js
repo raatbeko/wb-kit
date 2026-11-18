@@ -426,7 +426,10 @@ export class Office3D {
     controls.minDistance = 5;
     controls.maxDistance = 40;
     this.controls = controls;
-    controls.addEventListener("start", () => (this.fly = null));
+    controls.addEventListener("start", () => {
+      this.fly = null;
+      this.stopTour();
+    });
     controls.addEventListener("change", () => (this.movedAt = performance.now()));
 
     // Свет: мягкое небо + тёплое низкое солнце из окна (слева) + немного заполняющего.
@@ -879,6 +882,9 @@ export class Office3D {
     const p = this.people.get(id);
     if (!p) return;
     p.status = status;
+    p.activityText = activity;
+    // Пока сотрудник «говорит» на планёрке, его облачко не перебиваем — статус применится после.
+    if (p.saying) return;
     const text = status === "waiting" ? "! ждёт вашего решения" : activity;
     p.bubbleEl.textContent = text || "";
     p.bubbleEl.className = `bubble ${status}`;
@@ -939,6 +945,52 @@ export class Office3D {
     const shift = this.container.clientWidth > 900 ? 2.6 : 0;
     const t = p.root.position.clone().add(new THREE.Vector3(shift * 0.8, 1, -0.6 - shift * 0.6));
     this.flyTo(t.clone().add(new THREE.Vector3(3.6, 4.4, 6.2)), t);
+  }
+
+  /**
+   * Планёрка: камера по очереди подлетает к сотрудникам, каждый «говорит» свою
+   * главную фразу. lines: [{ id, text }]. Любой клик или вращение — конец.
+   */
+  tour(lines, { onEnd, stepMs = 2600 } = {}) {
+    this.stopTour();
+    const list = lines.filter((l) => this.people.has(l.id) && l.text);
+    if (!list.length) return;
+    let i = 0;
+    const say = (p, text) => {
+      p.saying = true;
+      p.bubbleEl.textContent = text;
+      p.bubbleEl.className = "bubble say";
+      p.bubbleEl.hidden = false;
+    };
+    const unsay = (p) => {
+      if (!p?.saying) return;
+      p.saying = false;
+      this.setAgent(p.id, p.status, p.activityText);
+    };
+    const next = () => {
+      unsay(this.people.get(list[i - 1]?.id));
+      if (i >= list.length) return this.stopTour(true);
+      const p = this.people.get(list[i].id);
+      const t = p.root.position.clone().add(new THREE.Vector3(0, 1, -0.6));
+      this.flyTo(t.clone().add(new THREE.Vector3(4.2, 5.2, 7.4)), t);
+      this.placeRing(p);
+      say(p, list[i].text);
+      i++;
+      this.tourState.timer = setTimeout(next, this.reduceMotion ? stepMs * 1.5 : stepMs);
+    };
+    this.tourState = { onEnd, timer: null, cleanup: () => list.forEach((l) => unsay(this.people.get(l.id))) };
+    next();
+  }
+
+  stopTour(finished = false) {
+    const st = this.tourState;
+    if (!st) return;
+    this.tourState = null;
+    clearTimeout(st.timer);
+    st.cleanup();
+    this.ring.visible = false;
+    this.flyTo(this.home.pos, this.home.target);
+    st.onEnd?.(finished);
   }
 
   placeRing(p) {

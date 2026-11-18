@@ -73,17 +73,28 @@ async function main() {
     await send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
     await send("Page.enable");
     await send("Page.navigate", { url: URL_ });
+    await sleep(1500);
+    // Планёрку на скриншотах не запускаем: помечаем, что сегодня она уже была.
+    await js(`localStorage.setItem("office-meeting", new Date().toDateString()); localStorage.setItem("office-view","3d"); location.reload()`);
     await sleep(9000); // данные, сцена, несколько шагов демо-сценария
-    await js(`localStorage.setItem("office-view","3d"); document.getElementById("view-3d").click()`);
-    await sleep(3000);
     await shot("screenshot-office.png");
 
-    // Панель логиста поверх 3D — видно, что сотрудник нашёл в магазине.
-    await js(`window.__office.onSelect("logist")`);
+    // Рабочий стол аналитика: главный вывод, график, воронка.
+    await js(`window.__office.onSelect("analyst")`);
     await sleep(2500);
     await shot("screenshot-agent.png");
 
-    await js(`document.getElementById("panel-close").click(); document.getElementById("view-2d").click()`);
+    // Таблица логиста: остатки и дни запаса с подсветкой.
+    await js(`window.__office.onSelect("logist"); setTimeout(() => document.querySelector('.ws-tabs [data-tab="table"]').click(), 300)`);
+    await sleep(2500);
+    await shot("screenshot-table.png");
+
+    // Планёрка: сотрудник рассказывает главное.
+    await js(`document.getElementById("panel-close").click(); document.getElementById("meeting-btn").click()`);
+    await sleep(6800);
+    await shot("screenshot-meeting.png");
+
+    await js(`window.__office.stopTour(); document.getElementById("view-2d").click()`);
     await sleep(1500);
     await shot("screenshot-cabinet.png");
     await js(`localStorage.setItem("office-view","3d")`);

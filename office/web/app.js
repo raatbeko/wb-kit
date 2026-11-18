@@ -241,6 +241,7 @@ function wsContext() {
 
 function openAgent(id, tab) {
   if (!state.agents.has(id)) return;
+  state.office?.stopTour();
   state.selected = id;
   state.panel = "agent";
   workspace.open(id, tab);
@@ -467,6 +468,9 @@ async function main() {
   setView(store.get("office-view") === "2d" || matchMedia("(max-width: 520px)").matches ? "2d" : "3d");
   await Promise.all([refreshSnapshot(), refreshApprovals(), refreshReports(), refreshTasks()]);
 
+  // Утренняя планёрка — сама, один раз в день, если открыт 3D и есть данные.
+  if (state.view === "3d" && state.office && snap() && store.get("office-meeting") !== new Date().toDateString()) setTimeout(runMeeting, 1200);
+
   const last = events.length ? events[events.length - 1].seq : 0;
   const es = new EventSource(`/api/stream?after=${last}`);
   es.onopen = () => ($("conn").innerHTML = "<b>●</b> на связи");
@@ -481,6 +485,30 @@ async function main() {
     renderScreens();
   }, 60_000);
 }
+
+/* ---------- Планёрка ---------- */
+
+const MEETING_ORDER = ["director", "analyst", "finance", "logist", "marketer", "reviews", "content", "scout", "reports"];
+
+/** Камера обходит столы, каждый говорит главное с цифрой; в конце — сколько решений ждут человека. */
+function runMeeting() {
+  if (state.view !== "3d" || !state.office) {
+    setView("3d");
+    if (!state.office) return notice("Планёрка показывается в 3D, а этот компьютер не умеет 3D");
+  }
+  closePanel();
+  const s = snap();
+  const lines = MEETING_ORDER.filter((id) => state.agents.has(id)).map((id) => ({ id, text: headlineFor(id, s, { reports: state.reports }) }));
+  if (!lines.some((l) => l.text)) return notice("Данных WB пока нет — планёрке нечего обсудить");
+  store.set("office-meeting", new Date().toDateString());
+  state.office.tour(lines, {
+    onEnd() {
+      const n = state.approvals.filter((a) => a.status === "pending").length;
+      notice(n ? `Планёрка окончена. Ждут вашего решения: ${n} — кнопка «Решения»` : "Планёрка окончена. Решений от вас сейчас не ждут.");
+    },
+  });
+}
+$("meeting-btn").addEventListener("click", runMeeting);
 
 $("panel-close").addEventListener("click", closePanel);
 $("panel-full").addEventListener("click", () => $("panel").classList.toggle("full"));
@@ -497,7 +525,10 @@ $("sync-btn").addEventListener("click", async () => {
   }
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !$("modal").open) closePanel();
+  if (e.key === "Escape" && !$("modal").open) {
+    state.office?.stopTour();
+    closePanel();
+  }
   // Enter на строке таблицы — как щелчок (карточка товара).
   if (e.key === "Enter" && e.target.matches?.("tr[data-nm]")) openProduct(Number(e.target.dataset.nm));
 });

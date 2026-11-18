@@ -109,3 +109,6 @@
   #panel-full { display: none; }
   .ws-head { padding-right: 56px; }
 }
+
+/* Планёрка: сотрудник «говорит» свою главную фразу */
+.bubble.say { max-width: 280px; white-space: normal; background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-size: 13px; font-weight: 600; line-height: 1.35; padding: 8px 12px; }
