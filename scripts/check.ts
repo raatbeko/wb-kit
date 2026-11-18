@@ -66,7 +66,11 @@ async function checkMpstats(token: string): Promise<Check> {
 const OFFICE_PORT = 3000;
 
 /** События Claude Code, без которых офис не узнает, кто работает и кто ждёт «да». */
-export const OFFICE_HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "SubagentStart", "SubagentStop", "PreToolUse", "PermissionRequest", "Stop"];
+export const OFFICE_HOOK_EVENTS = [
+  "SessionStart", "UserPromptSubmit", "SubagentStart", "SubagentStop", "PreToolUse",
+  // Без этих карточки решений в офисе не закрываются («да», ошибка WB, отказ).
+  "PermissionRequest", "PermissionDenied", "PostToolUse", "PostToolUseFailure", "Stop",
+];
 
 type HookSettings = { hooks?: Record<string, { hooks?: { command?: string }[] }[]>; disableAllHooks?: boolean };
 
@@ -98,6 +102,22 @@ export function checkOfficeHooks(root = ROOT): Check {
     // Файла нет — это нормально.
   }
   return { name, status: "ok", detail: "хуки подключены (сработают, когда Claude Code доверяет папке набора)" };
+}
+
+/** Ключ Claude API есть — значит, человек хочет вопросы и «Одобрить» прямо в офисе: нужен Agent SDK. */
+export async function checkAgentSdk(): Promise<Check> {
+  try {
+    const name = "@anthropic-ai/claude-agent-sdk";
+    await import(name);
+    return { name: "Офис: вопросы из офиса (Agent SDK)", status: "ok", detail: "установлен — можно спрашивать сотрудников и одобрять изменения прямо в офисе" };
+  } catch {
+    return {
+      name: "Офис: вопросы из офиса (Agent SDK)",
+      status: "warn",
+      detail: "ключ Claude API вписан, но Agent SDK не установлен (или его убрал npm install) — офис работает как окно в Claude Code",
+      fix: "npm run office:api — и перезапустите офис",
+    };
+  }
 }
 
 export function checkSqlite(): Check {
@@ -256,6 +276,7 @@ async function main() {
 
   // 5. 3D-офис
   checks.push(checkSqlite(), checkDataDir(), await checkOfficePort(), checkOfficeHooks());
+  if (readKey("ANTHROPIC_API_KEY")) checks.push(await checkAgentSdk());
 
   const features = featureMap(pings);
   const failed = checks.some((c) => c.status === "fail");

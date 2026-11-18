@@ -54,9 +54,19 @@ export function migrate(db: DB, dir = MIGRATIONS_DIR): number {
 export function openDb(path = DB_PATH): DB {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const db = new Database(path);
-  db.pragma("journal_mode = WAL");
   // Хук и сервер могут писать одновременно — ждём до 5 секунд, а не падаем с SQLITE_BUSY.
   db.pragma("busy_timeout = 5000");
+  // Переключение в WAL на новой базе busy_timeout не ждёт: несколько хуков, открывших
+  // базу одновременно, получают «database is locked». Повторяем сами, до ~3 секунд.
+  for (let i = 0; ; i++) {
+    try {
+      if (db.pragma("journal_mode", { simple: true }) !== "wal") db.pragma("journal_mode = WAL");
+      break;
+    } catch (err) {
+      if (i >= 30 || !/locked|busy/i.test(String((err as Error).message))) throw err;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50 + Math.floor(Math.random() * 50));
+    }
+  }
   db.pragma("foreign_keys = ON");
   migrate(db);
   return db;

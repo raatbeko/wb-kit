@@ -34,6 +34,12 @@ async function main() {
   // Демо — в отдельной базе: выдуманный магазин не смешивается с настоящим.
   const store = new SqliteOfficeStore(DEMO ? join(ROOT, "data", "office-demo.db") : DB_PATH);
   store.ensureAgents(STAFF);
+  // Офис упал или закрыли окно, пока изменение выполнялось: «одобрено» без итога.
+  // Выполнилось ли оно в WB — неизвестно; честно говорим и просим проверить кабинет.
+  for (const a of store.listApprovals({ status: "approved" })) {
+    store.resolveApproval(a.id, "failed");
+    store.addEvent({ kind: "agent_error", agentId: a.agentId, message: `Не знаю, выполнилось ли «${a.title}»: офис закрылся во время выполнения. Проверьте в кабинете WB.` });
+  }
   const secrets = new EnvSecretStore();
   const bus = new LocalEventBus(store);
 

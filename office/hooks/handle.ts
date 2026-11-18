@@ -98,7 +98,7 @@ export function handleHook(store: OfficeStore, h: HookInput, opts: HookOptions =
       // Ожидания, брошенные упавшим или закрытым окном больше часа назад: ответа уже не будет.
       const hourAgo = new Date(Date.parse(at) - 3600_000).toISOString();
       for (const a of store.listApprovals({ status: "pending" }))
-        if (a.sessionId !== session && a.createdAt < hourAgo) store.resolveApproval(a.id, "rejected");
+        if (a.sessionId !== null && a.sessionId !== session && a.createdAt < hourAgo) store.resolveApproval(a.id, "rejected");
       store.addEvent({ kind: "note", message: "Claude Code запущен — офис на связи", data });
       return;
     }

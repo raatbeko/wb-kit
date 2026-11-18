@@ -136,8 +136,10 @@ function statsHtml(id) {
   return desk.map((d) => `<span class="stat ${esc(d.tone)}">${esc(d.label)}: <b>${esc(d.value)}</b></span>`).join("");
 }
 
+let lastCardsHtml = "";
 function renderCards() {
-  $("cards").innerHTML = [...state.agents.values()]
+  // Перерисовка только при изменениях — иначе клик и фокус клавиатуры терялись бы каждые 4 секунды.
+  const html = [...state.agents.values()]
     .map(
       (a) => `<button class="card" type="button" data-id="${esc(a.id)}">
         <div class="who"><span class="avatar" style="background:${color(a.id)}">${esc(a.name[0])}</span>
@@ -148,8 +150,14 @@ function renderCards() {
       </button>`,
     )
     .join("");
-  for (const el of $("cards").querySelectorAll(".card")) el.addEventListener("click", () => openAgent(el.dataset.id));
+  if (html === lastCardsHtml) return;
+  lastCardsHtml = html;
+  $("cards").innerHTML = html;
 }
+$("cards").addEventListener("click", (ev) => {
+  const card = ev.target.closest(".card");
+  if (card) openAgent(card.dataset.id);
+});
 
 /* ---------- Панель ---------- */
 
@@ -173,20 +181,43 @@ function closePanel() {
   lastPanelHtml = "";
 }
 
+/** Подписи полей аргументов инструментов записи WB. */
+const ARG_LABELS = { nmID: "Артикул", price: "Цена до скидки, ₽", discount: "Скидка, %", text: "Текст", id: "ID", stocks: "Остатки", sku: "Баркод", amount: "Количество", warehouseId: "Склад", supplyId: "Поставка", orders: "Заказы", name: "Название" };
+
+/**
+ * Что именно уйдёт в WB — из настоящих аргументов, а не из пояснения сотрудника.
+ * Человек одобряет ровно то, что будет выполнено.
+ */
+function argsHtml(args) {
+  const val = (v) => (v !== null && typeof v === "object" ? JSON.stringify(v) : String(v));
+  const parts = [];
+  for (const [k, v] of Object.entries(args ?? {})) {
+    if (Array.isArray(v) && v.length && v.every((x) => x && typeof x === "object" && !Array.isArray(x))) {
+      const cols = [...new Set(v.flatMap((x) => Object.keys(x)))];
+      parts.push(`<table><thead><tr>${cols.map((c) => `<th>${esc(ARG_LABELS[c] ?? c)}</th>`).join("")}</tr></thead><tbody>${v
+        .slice(0, 50)
+        .map((x) => `<tr>${cols.map((c) => `<td>${esc(x[c] === undefined ? "" : val(x[c]))}</td>`).join("")}</tr>`)
+        .join("")}</tbody></table>${v.length > 50 ? `<p class="hint">и ещё ${v.length - 50}</p>` : ""}`);
+    } else parts.push(`<p><span class="muted">${esc(ARG_LABELS[k] ?? k)}:</span> ${esc(val(v))}</p>`);
+  }
+  return parts.join("");
+}
+
 function approvalHtml(a) {
   const rows = (a.changes ?? []).map((c) => `<tr><td>${esc(c.item)}</td><td>${esc(c.before)}</td><td>${esc(c.after)}</td></tr>`).join("");
-  const table = rows
-    ? `<table><thead><tr><th>Что</th><th>Было</th><th>Станет</th></tr></thead><tbody>${rows}</tbody></table>`
-    : `<p class="hint">Подробности — в Claude Code, где сотрудник показал изменение.</p>`;
+  const explain = rows ? `<table><thead><tr><th>Что</th><th>Было</th><th>Станет</th></tr></thead><tbody>${rows}</tbody></table>` : "";
+  const sent = Object.keys(a.args ?? {}).length ? `<div class="hint" style="margin-top:6px">Что уйдёт в WB:</div>${argsHtml(a.args)}` : "";
   const who = state.agents.get(a.agentId)?.name ?? a.agentId;
+  // Запрос из Claude Code (есть сеанс) решается там — двойное «да» выполнило бы изменение дважды.
+  const fromClaudeCode = Boolean(a.sessionId);
   const buttons =
     a.status !== "pending"
       ? ""
-      : state.mode.canApprove
+      : state.mode.canApprove && !fromClaudeCode
         ? `<div class="row"><button class="btn primary" data-approve="${esc(a.id)}" type="button">Одобрить</button><button class="btn danger" data-reject="${esc(a.id)}" type="button">Отклонить</button></div>`
         : `<p class="hint">Ответьте «да» или «нет» в окне Claude Code — офис обновится сам.</p>`;
   return `<div class="appr s-${esc(a.status)}"><div><b>${esc(a.title)}</b></div>
-    <div class="muted">${esc(who)} · ${esc(APPROVAL[a.status] ?? a.status)} · ${esc(date(a.createdAt))}</div>${table}${buttons}</div>`;
+    <div class="muted">${esc(who)} · ${esc(APPROVAL[a.status] ?? a.status)} · ${esc(date(a.createdAt))}</div>${explain}${sent}${buttons}</div>`;
 }
 
 function reportLink(r) {
@@ -296,8 +327,13 @@ $("panel-body").addEventListener("submit", async (ev) => {
 
 /* ---------- Данные ---------- */
 
+let approvalsReq = 0;
 async function refreshApprovals() {
-  state.approvals = await api("/api/approvals");
+  // Как у сотрудников: старый ответ, пришедший позже нового, не перезаписывает его.
+  const n = ++approvalsReq;
+  const list = await api("/api/approvals");
+  if (n !== approvalsReq) return;
+  state.approvals = list;
   renderTop();
   if (state.panel) renderPanel();
 }
@@ -313,14 +349,19 @@ async function refreshSnapshot() {
 }
 
 let pending = null;
+let needApprovals = false;
 function onEvent(e) {
   addEvent(e, true);
+  // Флаг копится по всей пачке: предложение могло прийти не первым событием.
+  if (["approval_requested", "approval_resolved"].includes(e.kind)) needApprovals = true;
   // Пачка событий за полсекунды — одно обновление.
   pending ??= setTimeout(async () => {
     pending = null;
+    const approvalsToo = needApprovals || state.approvals.some((a) => a.status === "pending");
+    needApprovals = false;
     try {
       await refreshAgents();
-      if (["approval_requested", "approval_resolved"].includes(e.kind) || state.approvals.some((a) => a.status === "pending")) await refreshApprovals();
+      if (approvalsToo) await refreshApprovals();
     } catch { /* следующий раз */ }
   }, 300);
   if (e.kind === "sync_finished") refreshSnapshot().catch(() => {});
@@ -330,8 +371,32 @@ function onEvent(e) {
   }
 }
 
+/** 3D создаётся, только когда его впервые выбрали: на телефоне и в 2D видеокарта не греется. */
+function ensureOffice() {
+  if (state.office || state.noWebGL) return state.office;
+  if (!hasWebGL()) {
+    state.noWebGL = true;
+  } else {
+    try {
+      state.office = new Office3D($("scene"), [...state.agents.values()], { onSelect: openAgent });
+      window.__office = state.office; // для скриншотов и отладки
+      renderTop();
+      for (const e of state.events) if (e.kind === "report_added" && e.agentId) state.office.addPaper(e.agentId);
+    } catch (err) {
+      console.error(err);
+      state.noWebGL = true;
+    }
+  }
+  if (state.noWebGL) {
+    $("view-3d").disabled = true;
+    $("view-3d").title = "Этот компьютер не умеет 3D — показываем карточки";
+  }
+  return state.office;
+}
+
 function setView(v) {
-  if (v === "3d" && !state.office) v = "2d";
+  if (v === "3d" && !ensureOffice()) v = "2d";
+  state.office?.setActive(v === "3d");
   state.view = v;
   store.set("office-view", v);
   $("scene").hidden = v !== "3d";
@@ -347,18 +412,6 @@ async function main() {
   state.keys = keys;
   for (const a of agents) state.agents.set(a.id, a);
 
-  if (hasWebGL()) {
-    try {
-      state.office = new Office3D($("scene"), agents, { onSelect: openAgent });
-      window.__office = state.office; // для скриншотов и отладки
-    } catch (err) {
-      console.error(err);
-    }
-  }
-  if (!state.office) {
-    $("view-3d").disabled = true;
-    $("view-3d").title = "Этот компьютер не умеет 3D — показываем карточки";
-  }
   setView(store.get("office-view") === "2d" || matchMedia("(max-width: 520px)").matches ? "2d" : "3d");
 
   await Promise.all([refreshSnapshot(), refreshApprovals(), refreshReports()]);

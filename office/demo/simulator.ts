@@ -8,6 +8,12 @@
  */
 import type { OfficeStore } from "../core/ports.js";
 import type { Snapshot } from "../sync/snapshot.js";
+import { DEMO_PRODUCTS } from "../../audit/demo.js";
+
+/** Цена товара демо-магазина (до скидки, ₽). */
+function demoPrice(nmId: number): number {
+  return DEMO_PRODUCTS.find((p) => p.nmId === nmId)?.price ?? 1000;
+}
 
 interface Beat {
   agent: string;
@@ -66,8 +72,9 @@ export function buildScenario(s: Snapshot | undefined): Beat[] {
         ? {
             tool: "update_prices",
             title: `Поднять цену «${losing.title}» (демо)`,
-            changes: [{ item: losing.title, before: "текущая", after: "+10%" }],
-            args: { data: [{ nmID: losing.nmId, price: 0 }] },
+            changes: [{ item: losing.title, before: `${demoPrice(losing.nmId)} ₽`, after: `${Math.round(demoPrice(losing.nmId) * 1.1)} ₽` }],
+            // Аргументы — строго по схеме update_prices: их офис и покажет, и (в демо — условно) выполнит.
+            args: { prices: [{ nmID: losing.nmId, price: Math.round(demoPrice(losing.nmId) * 1.1) }] },
           }
         : undefined,
     },

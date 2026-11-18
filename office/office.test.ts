@@ -133,7 +133,7 @@ describe("живые события", () => {
     const got: OfficeEvent[] = [];
     const off = new LocalEventBus(server, 20).subscribe(0, (e) => got.push(e));
     hook.addEvent({ kind: "agent_started", agentId: "reviews", message: "читаю отзывы" });
-    await new Promise((r) => setTimeout(r, 120));
+    for (let t = 0; t < 100 && !got.length; t++) await new Promise((r) => setTimeout(r, 20));
     off();
     expect(got.map((e) => e.message)).toEqual(["читаю отзывы"]);
   });

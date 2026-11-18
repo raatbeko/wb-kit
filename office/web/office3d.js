@@ -304,7 +304,8 @@ export class Office3D {
     this.resize = this.resize.bind(this);
     new ResizeObserver(this.resize).observe(container);
     this.resize();
-    renderer.setAnimationLoop(() => this.frame());
+    this.active = false;
+    this.setActive(true);
   }
 
   buildRoom() {
@@ -402,6 +403,17 @@ export class Office3D {
     p.bang.visible = status === "waiting";
     p.desk.lampMat.color.set(status === "error" ? 0xc0392b : status === "working" ? 0x2f7d4f : 0x555555);
     p.desk.lampMat.emissive.set(status === "error" ? 0x8a1a10 : status === "working" ? 0x1a5a33 : 0x000000);
+  }
+
+  /** Включить/выключить отрисовку: в 2D-режиме сцена не рисуется и не грузит видеокарту. */
+  setActive(on) {
+    if (on === this.active) return;
+    this.active = on;
+    this.renderer.setAnimationLoop(on ? () => this.frame() : null);
+    if (on) {
+      this.timer.update(); // без скачка анимации после паузы
+      this.resize();
+    }
   }
 
   /** Отчёт пришёл — на столе прибавилось бумаг. */

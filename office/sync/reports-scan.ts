@@ -2,6 +2,11 @@
  * Отчёты, которые сделал Claude Code (/audit, /office, /competitors, /card),
  * лежат папками в reports/. Офис находит новые и заносит в базу — чтобы их
  * можно было открыть со стола сотрудника.
+ *
+ * Одна папка — один отчёт. Отчёт пишется по частям (файлы ролей, потом план,
+ * потом HTML; HTML аудита раньше summary.json), поэтому заносим папку, только
+ * когда в ней есть HTML, а если позже появились выжимка или другой главный
+ * файл — обновляем ту же запись, а не создаём новую.
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -16,12 +21,9 @@ const KINDS: [RegExp, ReportKind, string, string | null][] = [
   [/^card-.*?(\d{4}-\d{2}-\d{2})(-demo)?$/, "card", "Карточка", "content"],
 ];
 
-/** Главный файл отчёта: HTML (его откроет браузер), иначе план.md. */
+/** Главный файл готового отчёта — HTML. Нет HTML — отчёт ещё пишется. */
 function mainFile(dir: string): string | null {
-  const files = readdirSync(dir);
-  const html = files.find((f) => f.endsWith(".html"));
-  if (html) return html;
-  return files.find((f) => f === "план.md") ?? files.find((f) => f.endsWith(".md")) ?? null;
+  return readdirSync(dir).find((f) => f.toLowerCase().endsWith(".html")) ?? null;
 }
 
 /** Короткая выжимка из summary.json: только то, что нужно подписи в офисе. */
@@ -36,30 +38,34 @@ function shortSummary(dir: string): Record<string, unknown> | null {
       ...(Array.isArray(s.kpis) ? { kpis: (s.kpis as unknown[]).slice(0, 8) } : {}),
     };
   } catch {
-    return null;
+    return null; // файл ещё дописывается — возьмём при следующем проходе
   }
 }
 
-/** Занести новые отчёты. Возвращает, сколько добавлено. */
+/** Занести новые отчёты и обновить дописанные. Возвращает, сколько добавлено. */
 export function scanReports(store: OfficeStore, reportsDir: string): number {
   if (!existsSync(reportsDir)) return 0;
   let added = 0;
   for (const name of readdirSync(reportsDir)) {
     const dir = join(reportsDir, name);
-    let isDir = false;
     try {
-      isDir = statSync(dir).isDirectory();
+      if (!statSync(dir).isDirectory()) continue;
     } catch {
       continue;
     }
-    if (!isDir) continue;
     const kind = KINDS.find(([re]) => re.test(name));
     if (!kind) continue;
     const [re, type, label, agentId] = kind;
     const file = mainFile(dir);
-    if (!file) continue; // отчёт ещё пишется
+    if (!file) continue;
     const path = `reports/${name}/${file}`;
-    if (store.findReportByPath(path)) continue;
+    const summary = shortSummary(dir);
+
+    const existing = store.findReportByFolder(`reports/${name}/`);
+    if (existing) {
+      if (existing.path !== path || JSON.stringify(existing.summary) !== JSON.stringify(summary)) store.updateReport(existing.id, { path, summary });
+      continue;
+    }
     const m = re.exec(name)!;
     const date = m[1]!;
     const demo = Boolean(m[2]);
@@ -67,7 +73,7 @@ export function scanReports(store: OfficeStore, reportsDir: string): number {
       kind: type,
       title: `${label}${demo ? " (демо)" : ""} — ${date.split("-").reverse().join(".")}`,
       path,
-      summary: shortSummary(dir),
+      summary,
       agentId,
       createdAt: statSync(dir).mtime.toISOString(),
     });

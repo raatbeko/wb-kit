@@ -15,12 +15,13 @@
  *   OFFICE_AGENT подсказывает хуку, какой это сотрудник.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { z } from "zod";
 import { ROOT } from "../../mcp/wb/src/env.js";
 import { WRITE_TOOLS } from "../../mcp/wb/src/tools.js";
 import type { AgentRunner, AgentRunRequest, OfficeStore, SecretStore } from "../core/ports.js";
 import { short } from "../hooks/describe.js";
+import { isWriteTool, validateWriteArgs, writeToolSchemas } from "./validate.js";
 
 export const SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk";
 
@@ -62,6 +63,36 @@ const PROPOSE_RULES = `
 его точные аргументы, короткий заголовок и таблицу «было → станет». Человек нажмёт «Одобрить» в офисе.
 Итоговый ответ — коротко: что нашёл, что предложил, что сделать человеку.`;
 
+/**
+ * Что сотруднику можно без вопроса (спросить некого — человек в офисе):
+ * - инструменты WB на чтение;
+ * - Read/Grep/Glob, если они есть у роли, и только внутри папки набора, кроме .env
+ *   (иначе подсказка в отзыве покупателя могла бы заставить прочитать чужие файлы).
+ * Всё остальное — отказ. `updatedInput` обязателен в части версий SDK.
+ */
+export function makeCanUseTool(root: string, roleTools: string[]) {
+  const base = resolve(root);
+  const inside = (p: unknown) => {
+    if (p === undefined || p === null || p === "") return true; // по умолчанию — папка набора (cwd)
+    const full = resolve(base, String(p));
+    const rel = relative(base, full);
+    if (rel.startsWith("..") || isAbsolute(rel)) return false;
+    return !/(^|[\\/])\.env(\.|$)/i.test(rel);
+  };
+  return async (toolName: string, input: Record<string, unknown> = {}) => {
+    const deny = (message: string) => ({ behavior: "deny" as const, message });
+    if (toolName.startsWith("mcp__wb__")) {
+      return isWriteTool(toolName.slice(9))
+        ? deny("Изменения в кабинете — только через propose_change.")
+        : { behavior: "allow" as const, updatedInput: input };
+    }
+    if (["Read", "Grep", "Glob"].includes(toolName) && roleTools.includes(toolName)) {
+      return inside(input.file_path) && inside(input.path) ? { behavior: "allow" as const, updatedInput: input } : deny("Читать можно только файлы набора wb-kit (кроме .env).");
+    }
+    return deny("В офисе этот инструмент недоступен. Изменения — через propose_change.");
+  };
+}
+
 export interface SdkRunnerDeps {
   store: OfficeStore;
   secrets: SecretStore;
@@ -81,7 +112,9 @@ export class SdkAgentRunner implements AgentRunner {
     const { sdk, store } = this.deps;
     const proposeChange = sdk.tool(
       "propose_change",
-      "Предложить изменение в кабинете WB. Оно появится в офисе, выполнится после кнопки «Одобрить».",
+      "Предложить изменение в кабинете WB. Оно появится в офисе, выполнится после кнопки «Одобрить». " +
+        "args — точные аргументы инструмента по его схеме (человек увидит именно их):\n" +
+        writeToolSchemas(),
       {
         tool: z.enum(WRITE_TOOLS as [string, ...string[]]),
         args: z.record(z.string(), z.unknown()),
@@ -89,7 +122,10 @@ export class SdkAgentRunner implements AgentRunner {
         changes: z.array(z.object({ item: z.string(), before: z.string(), after: z.string() })).max(100),
       },
       (async (a: { tool: string; args: Record<string, unknown>; title: string; changes: { item: string; before: string; after: string }[] }) => {
-        const ap = store.createApproval({ agentId, taskId, tool: a.tool, title: a.title, changes: a.changes, args: a.args });
+        // Неверные аргументы — назад модели с объяснением, а не в офис: «угаданный» запрос в WB не уйдёт.
+        const v = validateWriteArgs(a.tool, a.args);
+        if (!v.ok) return { content: [{ type: "text", text: `${v.error}. Исправь аргументы по схеме и предложи снова.` }], isError: true };
+        const ap = store.createApproval({ agentId, taskId, tool: a.tool, title: a.title, changes: a.changes, args: v.args });
         store.setAgentStatus(agentId, "waiting", `ждёт вашего решения: ${a.title}`);
         store.addEvent({ kind: "approval_requested", agentId, taskId, message: `Предлагает: ${a.title}. Нажмите «Одобрить» или «Отклонить».`, data: { approvalId: ap.id } });
         return { content: [{ type: "text", text: "Предложение отправлено человеку на одобрение. Не повторяй его." }] };
@@ -130,13 +166,10 @@ export class SdkAgentRunner implements AgentRunner {
           wb: { type: "stdio", command: process.execPath, args: ["--import", "tsx", join(root, "mcp", "wb", "src", "index.ts")] },
           office: this.officeServer(req.agentId, req.taskId),
         },
-        allowedTools: [...role.tools.filter((t) => t !== "Bash" && t !== "Write" && t !== "Edit"), "mcp__office__propose_change"],
-        disallowedTools: [...WRITE_TOOLS.map((t) => `mcp__wb__${t}`), "Bash", "Write", "Edit"],
-        // Всё, что не разрешено явно, — отказ без вопроса: спросить некого, человек в офисе.
-        canUseTool: async (toolName: string) =>
-          toolName.startsWith("mcp__wb__") && !(WRITE_TOOLS as string[]).includes(toolName.slice(9))
-            ? { behavior: "allow" }
-            : { behavior: "deny", message: "В офисе этот инструмент недоступен. Изменения — через propose_change." },
+        // Заранее разрешено только предложение изменения; остальное решает canUseTool.
+        allowedTools: ["mcp__office__propose_change"],
+        disallowedTools: [...WRITE_TOOLS.map((t) => `mcp__wb__${t}`), "Bash", "Write", "Edit", "WebFetch", "WebSearch"],
+        canUseTool: makeCanUseTool(root, role.tools),
       },
     });
 

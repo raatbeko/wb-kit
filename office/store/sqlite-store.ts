@@ -250,6 +250,28 @@ export class SqliteOfficeStore implements OfficeStore {
     return r && toReport(r);
   }
 
+  findReportByFolder(folder: string): Report | undefined {
+    // substr вместо LIKE: в именах папок бывают «_» и «%», которые LIKE понял бы как шаблон.
+    const r = this.db
+      .prepare("SELECT * FROM reports WHERE workspace_id = ? AND substr(path, 1, ?) = ? ORDER BY created_at LIMIT 1")
+      .get(this.workspaceId, folder.length, folder) as Row | undefined;
+    return r && toReport(r);
+  }
+
+  updateReport(id: string, patch: Partial<Pick<Report, "path" | "summary" | "title">>): void {
+    const cur = this.db.prepare("SELECT * FROM reports WHERE workspace_id = ? AND id = ?").get(this.workspaceId, id) as Row | undefined;
+    if (!cur) return;
+    this.db
+      .prepare("UPDATE reports SET path = ?, summary = ?, title = ? WHERE workspace_id = ? AND id = ?")
+      .run(
+        patch.path !== undefined ? patch.path : cur.path,
+        patch.summary !== undefined ? json(patch.summary) : cur.summary,
+        patch.title ?? cur.title,
+        this.workspaceId,
+        id,
+      );
+  }
+
   listReports(limit = 50): Report[] {
     return (
       this.db

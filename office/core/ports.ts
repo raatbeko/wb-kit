@@ -58,6 +58,9 @@ export interface OfficeStore {
   addReport(r: Omit<Report, "workspaceId" | "id" | "createdAt"> & { createdAt?: string }): Report;
   /** Отчёт по пути — чтобы не заносить один и тот же файл дважды. */
   findReportByPath(path: string): Report | undefined;
+  /** Отчёт, главный файл которого лежит в этой папке (`reports/audit-…/`). */
+  findReportByFolder(folder: string): Report | undefined;
+  updateReport(id: string, patch: Partial<Pick<Report, "path" | "summary" | "title">>): void;
   listReports(limit?: number): Report[];
 
   addSnapshot(s: Snapshot): StoredSnapshot;

@@ -66,8 +66,19 @@ class HttpError extends Error {
   }
 }
 
+/**
+ * Заголовки для всех ответов: офис нельзя встроить во фрейм чужого сайта
+ * (иначе кнопку «Одобрить» подсунули бы под клик), тип файла не угадывается.
+ */
+const SECURITY_HEADERS = {
+  "x-frame-options": "DENY",
+  "content-security-policy": "frame-ancestors 'none'",
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer",
+};
+
 function sendJson(res: ServerResponse, status: number, body: unknown) {
-  res.writeHead(status, { "content-type": TYPES[".json"]!, "cache-control": "no-store" });
+  res.writeHead(status, { ...SECURITY_HEADERS, "content-type": TYPES[".json"]!, "cache-control": "no-store" });
   res.end(JSON.stringify(body));
 }
 
@@ -93,9 +104,12 @@ export function safeJoin(root: string, rel: string): string | null {
   return file;
 }
 
-function sendFile(res: ServerResponse, file: string | null, opts: { download?: boolean } = {}) {
+function sendFile(res: ServerResponse, file: string | null, opts: { download?: boolean; sandbox?: boolean } = {}) {
   if (!file || !existsSync(file) || !statSync(file).isFile()) return sendJson(res, 404, { error: "Не найдено" });
-  const headers: Record<string, string> = { "content-type": TYPES[extname(file).toLowerCase()] ?? "application/octet-stream" };
+  const headers: Record<string, string> = { ...SECURITY_HEADERS, "content-type": TYPES[extname(file).toLowerCase()] ?? "application/octet-stream" };
+  // Отчёты пишет Claude из данных WB и отзывов покупателей. В «песочнице» скрипт из отчёта
+  // не получит адрес офиса и не сможет нажать «Одобрить» через API.
+  if (opts.sandbox) headers["content-security-policy"] = "sandbox allow-popups allow-popups-to-escape-sandbox; frame-ancestors 'none'";
   if (opts.download) headers["content-disposition"] = `attachment; filename*=UTF-8''${encodeURIComponent(file.split(sep).pop()!)}`;
   res.writeHead(200, headers);
   res.end(readFileSync(file));
@@ -142,6 +156,7 @@ async function readJson(req: IncomingMessage): Promise<Record<string, unknown>> 
 
 function stream(req: IncomingMessage, res: ServerResponse, deps: AppDeps, after: number) {
   res.writeHead(200, {
+    ...SECURITY_HEADERS,
     "content-type": "text/event-stream; charset=utf-8",
     "cache-control": "no-store",
     connection: "keep-alive",
@@ -166,7 +181,10 @@ async function approve(deps: AppDeps, id: string, decision: "approve" | "reject"
   const a = store.listApprovals().find((x) => x.id === id);
   if (!a) throw new HttpError(404, "Нет такого предложения");
   if (a.status !== "pending") throw new HttpError(409, "Это предложение уже решено");
-  if (!deps.executeApproval) throw new HttpError(409, "Решение по этому изменению принимается в Claude Code — ответьте там «да» или «нет»");
+  // Запрос из Claude Code (у него есть сеанс) решается только там: иначе «Одобрить» здесь
+  // и «да» в терминале выполнили бы одно изменение в WB дважды.
+  if (a.sessionId !== null || !deps.executeApproval)
+    throw new HttpError(409, "Решение по этому изменению принимается в Claude Code — ответьте там «да» или «нет»");
 
   if (decision === "reject") {
     const r = store.resolveApproval(id, "rejected");
@@ -266,7 +284,7 @@ export function handle(deps: AppDeps) {
       // Отчёты Claude Code: reports/… (Excel — скачиванием).
       if (p.startsWith("/reports/")) {
         const file = safeJoin(reportsDir, p.slice("/reports/".length));
-        return sendFile(res, file, { download: file?.endsWith(".xlsx") });
+        return sendFile(res, file, { download: file?.endsWith(".xlsx"), sandbox: true });
       }
       // three.js из node_modules — без сборки фронта и без интернета.
       if (p.startsWith("/vendor/three/")) return sendFile(res, safeJoin(THREE_DIR, p.slice("/vendor/three/".length)));

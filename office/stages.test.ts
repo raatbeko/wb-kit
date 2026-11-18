@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ROOT } from "../mcp/wb/src/env.js";
 import { createExecutor } from "./agents/execute.js";
-import { SdkAgentRunner, readRole, type SdkLike } from "./agents/sdk-runner.js";
+import { SdkAgentRunner, makeCanUseTool, readRole, type SdkLike } from "./agents/sdk-runner.js";
 import { LocalEventBus } from "./bus/local-bus.js";
 import { STAFF } from "./core/staff.js";
 import { buildScenario, startDemo } from "./demo/simulator.js";
@@ -76,14 +76,31 @@ describe("этап 3: данные WB в офисе", () => {
     writeFileSync(join(dir, "audit-2026-11-19", "Аудит WB 2026-11-19.html"), "<html>");
     writeFileSync(join(dir, "audit-2026-11-19", "summary.json"), JSON.stringify({ issues: [{ priority: "high" }, { priority: "low" }], kpis: [] }));
     mkdirSync(join(dir, "office-2026-11-18-demo"));
-    writeFileSync(join(dir, "office-2026-11-18-demo", "план.md"), "# план");
+    writeFileSync(join(dir, "office-2026-11-18-demo", "план.md"), "# план"); // HTML ещё нет — отчёт пишется
     mkdirSync(join(dir, "competitors-2026-11-19")); // пусто — ещё пишется
     mkdirSync(join(dir, "чужая папка"));
-    expect(scanReports(s, dir)).toBe(2);
+    expect(scanReports(s, dir)).toBe(1);
     expect(scanReports(s, dir)).toBe(0);
     const audit = s.listReports().find((r) => r.kind === "audit")!;
     expect(audit).toMatchObject({ title: "Аудит магазина — 19.11.2026", agentId: "analyst", summary: { issues: 2, high: 1 } });
+    // /office дописал HTML — появляется одна запись, не три.
+    writeFileSync(join(dir, "office-2026-11-18-demo", "Офис.html"), "<html>");
+    expect(scanReports(s, dir)).toBe(1);
+    expect(s.listReports().filter((r) => r.kind === "office")).toHaveLength(1);
     expect(s.listReports().find((r) => r.kind === "office")?.title).toContain("(демо)");
+  });
+
+  it("выжимка, дописанная после HTML, подтягивается в ту же запись", () => {
+    const s = office();
+    const dir = tmp("office-reports-");
+    mkdirSync(join(dir, "audit-2026-11-20"));
+    writeFileSync(join(dir, "audit-2026-11-20", "a.html"), "<html>");
+    expect(scanReports(s, dir)).toBe(1);
+    expect(s.listReports()[0]?.summary).toBeNull();
+    writeFileSync(join(dir, "audit-2026-11-20", "summary.json"), JSON.stringify({ issues: [{ priority: "high" }] }));
+    expect(scanReports(s, dir)).toBe(0);
+    expect(s.listReports()).toHaveLength(1);
+    expect(s.listReports()[0]?.summary).toMatchObject({ issues: 1, high: 1 });
   });
 });
 
@@ -99,7 +116,8 @@ describe("этап 8: демо-офис", () => {
   it("симулятор оживляет офис и не копит одобрения", async () => {
     const s = office();
     const stop = startDemo(s, () => undefined, 5);
-    await new Promise((r) => setTimeout(r, 400));
+    // Ждём по условию, а не фиксированное время: под нагрузкой таймеры запаздывают.
+    for (let t = 0; t < 100 && s.recentEvents(500).length <= 20; t++) await new Promise((r) => setTimeout(r, 50));
     stop();
     expect(s.recentEvents(500).length).toBeGreaterThan(20);
     expect(s.listApprovals({ status: "pending" }).length).toBeLessThanOrEqual(2);
@@ -175,12 +193,12 @@ describe("сервер: защита и одобрения", () => {
     const exec = createExecutor(secretsWith(""), { demo: true });
     const { store, call, close } = await start({ demo: true, executeApproval: async (a) => (calls++, exec(a)) });
     try {
-      const a = store.createApproval({ agentId: "reviews", taskId: null, tool: "reply_feedback", title: "Ответ", changes: [], args: {} });
+      const a = store.createApproval({ agentId: "reviews", taskId: null, tool: "reply_feedback", title: "Ответ", changes: [], args: { id: "f1", text: "Спасибо!" } });
       expect((await call("POST", `/api/approvals/${a.id}/approve`, json, "{}")).status).toBe(200);
       expect((await call("POST", `/api/approvals/${a.id}/approve`, json, "{}")).status).toBe(409);
       expect(calls).toBe(1);
       expect(store.listApprovals({ status: "done" })).toHaveLength(1);
-      const b = store.createApproval({ agentId: "reviews", taskId: null, tool: "reply_feedback", title: "Ответ 2", changes: [], args: {} });
+      const b = store.createApproval({ agentId: "reviews", taskId: null, tool: "reply_feedback", title: "Ответ 2", changes: [], args: { id: "f2", text: "Спасибо!" } });
       expect((await call("POST", `/api/approvals/${b.id}/reject`, json, "{}")).status).toBe(200);
       expect(store.listApprovals({ status: "rejected" })).toHaveLength(1);
     } finally {
@@ -188,10 +206,47 @@ describe("сервер: защита и одобрения", () => {
     }
   });
 
-  it("через одобрение нельзя вызвать инструмент чтения или чужой", async () => {
+  it("через одобрение нельзя вызвать инструмент чтения, чужой или с неверными аргументами", async () => {
     const exec = createExecutor(secretsWith(""), { demo: true });
-    await expect(exec({ tool: "get_prices" } as never)).rejects.toThrow();
-    await expect(exec({ tool: "rm -rf" } as never)).rejects.toThrow();
+    await expect(exec({ tool: "get_prices", args: {} } as never)).rejects.toThrow();
+    await expect(exec({ tool: "rm -rf", args: {} } as never)).rejects.toThrow();
+    await expect(exec({ tool: "update_prices", args: { data: [{ nmID: 1, price: 0 }] } } as never)).rejects.toThrow(/Аргументы/);
+    await expect(exec({ tool: "update_prices", args: { prices: [{ nmID: 1, price: 590 }] } } as never)).resolves.toContain("демо");
+  });
+
+  it("запрос из Claude Code нельзя одобрить в офисе — только в терминале (иначе изменение уйдёт дважды)", async () => {
+    let calls = 0;
+    const { store, call, close } = await start({ executeApproval: async () => (calls++, "") });
+    try {
+      const a = store.createApproval({ agentId: "finance", taskId: null, tool: "update_prices", title: "x", changes: [], args: {}, sessionId: "S1" });
+      const r = await call("POST", `/api/approvals/${a.id}/approve`, json, "{}");
+      expect(r.status).toBe(409);
+      expect(calls).toBe(0);
+    } finally {
+      await close();
+    }
+  });
+
+  it("офис нельзя встроить во фрейм, отчёты — в песочнице", async () => {
+    const dir = tmp("office-rep-");
+    mkdirSync(join(dir, "audit-2026-11-19"));
+    writeFileSync(join(dir, "audit-2026-11-19", "a.html"), "<script>fetch('/api/approvals')</script>");
+    const { port, close } = await start({ reportsDir: dir });
+    try {
+      const head = (path: string) =>
+        new Promise<Record<string, unknown>>((resolve) =>
+          request({ host: "127.0.0.1", port, path, headers: { host: `localhost:${port}` } }, (res) => {
+            res.resume();
+            resolve(res.headers);
+          }).end(),
+        );
+      const page = await head("/");
+      expect(page["x-frame-options"]).toBe("DENY");
+      expect(String(page["content-security-policy"])).toContain("frame-ancestors 'none'");
+      expect(String((await head("/reports/audit-2026-11-19/a.html"))["content-security-policy"])).toMatch(/^sandbox/);
+    } finally {
+      await close();
+    }
   });
 
   it("вопрос из офиса без ключа Claude API — 409 с подсказкой", async () => {
@@ -234,7 +289,7 @@ describe("этап 7: сотрудник через Agent SDK (SDK подмен�
         onOptions?.(options);
         return (async function* () {
           if (propose)
-            await tools[0]!.handler({ tool: "update_prices", args: { data: [] }, title: "Поднять цену", changes: [{ item: "Плед", before: "1490", after: "1590" }] } as never);
+            await tools[0]!.handler({ tool: "update_prices", args: { prices: [{ nmID: 1, price: 1590 }] }, title: "Поднять цену", changes: [{ item: "Плед", before: "1490", after: "1590" }] } as never);
           yield { type: "result", subtype: "success", result };
         })();
       },
@@ -267,6 +322,39 @@ describe("этап 7: сотрудник через Agent SDK (SDK подмен�
     await runner.run({ agentId: "finance", question: "что в минусе?", taskId: task.id });
     expect(s.listApprovals({ status: "pending" })).toMatchObject([{ agentId: "finance", tool: "update_prices", taskId: task.id, changes: [{ after: "1590" }] }]);
     expect(s.getAgent("finance")?.status).toBe("waiting");
+  });
+
+  it("неверные аргументы предложения возвращаются модели, а не попадают в офис", async () => {
+    const s = office();
+    const tools: { handler: (a: never) => Promise<{ isError?: boolean }> }[] = [];
+    const sdk: SdkLike = {
+      tool: (_n, _d, _s, handler) => (tools.push({ handler: handler as never }), {}),
+      createSdkMcpServer: (a) => a,
+      query: () =>
+        (async function* () {
+          const r = await tools[0]!.handler({ tool: "update_prices", args: { data: [] }, title: "x", changes: [] } as never);
+          expect(r.isError).toBe(true);
+          yield { type: "result", subtype: "success", result: "ok" };
+        })(),
+    };
+    const task = s.createTask({ agentId: "finance", question: "x", source: "office" });
+    await new SdkAgentRunner({ store: s, secrets: secretsWith("ANTHROPIC_API_KEY=k\n"), sdk }).run({ agentId: "finance", question: "x", taskId: task.id });
+    expect(s.listApprovals()).toHaveLength(0);
+  });
+
+  it("сотрудник читает только файлы набора, не .env и не чужие папки", async () => {
+    const can = makeCanUseTool(ROOT, ["Read", "Grep", "Glob", "mcp__wb__*"]);
+    expect((await can("Read", { file_path: join(ROOT, "reports", "x.md") })).behavior).toBe("allow");
+    expect((await can("Read", { file_path: "reports/x.md" })).behavior).toBe("allow");
+    expect((await can("Grep", { pattern: "x" })).behavior).toBe("allow");
+    expect((await can("Read", { file_path: join(ROOT, ".env") })).behavior).toBe("deny");
+    expect((await can("Read", { file_path: join(ROOT, "..", "secret.txt") })).behavior).toBe("deny");
+    expect((await can("Glob", { pattern: "*", path: "C:\\Users" })).behavior).toBe("deny");
+    expect((await can("Write", { file_path: "reports/x.md" })).behavior).toBe("deny");
+    const noRead = makeCanUseTool(ROOT, ["mcp__wb__*"]);
+    expect((await noRead("Read", { file_path: "reports/x.md" })).behavior).toBe("deny");
+    const allow = await can("mcp__wb__get_prices", { a: 1 });
+    expect(allow).toEqual({ behavior: "allow", updatedInput: { a: 1 } });
   });
 
   it("без ключа Claude API — понятная ошибка", async () => {
