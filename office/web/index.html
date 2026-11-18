@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WB Офис</title>
+<!--
+  Временная страница этапов 0–2: проверяет, что сервер, база и живые события
+  работают. На этапе 4–5 её заменит 2D-кабинет и 3D-сцена (office/web на Vite).
+-->
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #ffffff; --text: #1d1d1f; --muted: #6b6b70; --line: #e4e2dc;
+    --idle: #9a9aa0; --working: #2f7d4f; --waiting: #c27a00; --error: #c0392b; --accent: #7b2fbe;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141416; --card: #1d1d20; --text: #ececee; --muted: #9a9aa2; --line: #2c2c31;
+      --idle: #6d6d74; --working: #4fbf7d; --waiting: #f0a72a; --error: #ef6b5b; --accent: #b77cf0;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1 { font-size: 22px; margin: 0; }
+  h1 span { color: var(--accent); }
+  h2 { font-size: 15px; margin: 28px 0 10px; color: var(--muted); font-weight: 600; }
+  .conn { font-size: 13px; color: var(--muted); }
+  .conn b { font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .agent { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .agent .top { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--idle); flex: none; }
+  .dot.working { background: var(--working); }
+  .dot.waiting { background: var(--waiting); }
+  .dot.error { background: var(--error); }
+  .agent .name { font-weight: 600; }
+  .agent .title, .agent .duty { color: var(--muted); font-size: 13px; }
+  .agent .act { font-size: 13px; margin-top: 6px; min-height: 18px; }
+  .keys { display: flex; gap: 8px; flex-wrap: wrap; }
+  .key { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+  .key.ok::before { content: "● "; color: var(--working); }
+  .key.no::before { content: "○ "; color: var(--muted); }
+  ol.feed { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  ol.feed li { padding: 8px 14px; border-top: 1px solid var(--line); font-size: 14px; display: flex; gap: 10px; }
+  ol.feed li:first-child { border-top: 0; }
+  ol.feed time { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+  .empty { color: var(--muted); padding: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>WB <span>Офис</span></h1>
+    <div class="conn" id="conn">Подключаюсь…</div>
+  </header>
+
+  <h2>Ключи</h2>
+  <div class="keys" id="keys"></div>
+
+  <h2>Сотрудники</h2>
+  <div class="grid" id="agents"></div>
+
+  <h2>Что происходит</h2>
+  <ol class="feed" id="feed"><li class="empty">Пока тихо. Как только вы зададите вопрос в Claude Code, здесь появятся шаги сотрудников.</li></ol>
+</main>
+<script>
+  const STATUS = { idle: "отдыхает", working: "работает", waiting: "ждёт вашего решения", error: "ошибка" };
+  const KEY_NAMES = { WB_API_TOKEN: "Wildberries", MPSTATS_TOKEN: "MPSTATS", ANTHROPIC_API_KEY: "Claude API" };
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  let agents = new Map();
+
+  function renderAgents() {
+    $("agents").innerHTML = [...agents.values()].map((a) => `
+      <div class="agent">
+        <div class="top"><span class="dot ${esc(a.status)}" title="${esc(STATUS[a.status])}"></span><span class="name">${esc(a.name)}</span></div>
+        <div class="title">${esc(a.title)}</div>
+        <div class="duty">${esc(a.duty)}</div>
+        <div class="act">${a.activity ? esc(a.activity) : esc(STATUS[a.status])}</div>
+      </div>`).join("");
+  }
+
+  function addEvent(e) {
+    const feed = $("feed");
+    feed.querySelector(".empty")?.remove();
+    const who = e.agentId && agents.get(e.agentId)?.name;
+    const li = document.createElement("li");
+    li.innerHTML = `<time>${new Date(e.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</time><span>${who ? `<b>${esc(who)}:</b> ` : ""}${esc(e.message)}</span>`;
+    feed.prepend(li);
+    while (feed.children.length > 100) feed.lastChild.remove();
+  }
+
+  async function load() {
+    const [list, keys, events] = await Promise.all(["/api/agents", "/api/keys", "/api/events?limit=30"].map((u) => fetch(u).then((r) => r.json())));
+    agents = new Map(list.map((a) => [a.id, a]));
+    renderAgents();
+    $("keys").innerHTML = keys.map((k) => `<span class="key ${k.present ? "ok" : "no"}">${esc(KEY_NAMES[k.name] ?? k.name)}: ${k.present ? "подключён" : "нет"}</span>`).join("");
+    events.forEach(addEvent);
+    const last = events.length ? events[events.length - 1].seq : 0;
+    const es = new EventSource(`/api/stream?after=${last}`);
+    es.onopen = () => ($("conn").innerHTML = "<b>●</b> на связи");
+    es.onerror = () => ($("conn").textContent = "Нет связи с офисом — переподключаюсь…");
+    es.addEventListener("office", async (msg) => {
+      addEvent(JSON.parse(msg.data));
+      // Статусы сотрудников меняет тот же процесс, что пишет событие, — перечитываем список.
+      const fresh = await fetch("/api/agents").then((r) => r.json());
+      agents = new Map(fresh.map((a) => [a.id, a]));
+      renderAgents();
+    });
+  }
+  load().catch(() => ($("conn").textContent = "Офис не отвечает. Запустите: npm run office:web"));
+</script>
+</body>
+</html>

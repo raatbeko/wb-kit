@@ -63,7 +63,8 @@ describe("офис агентов (.claude/agents)", () => {
   const agents = readdirSync(dir)
     .filter((f) => f.endsWith(".md"))
     .map((f) => {
-      const text = readFileSync(join(dir, f), "utf8");
+      // Git на Windows может выдать файлы с переводами строк CRLF — приводим к LF.
+      const text = readFileSync(join(dir, f), "utf8").replace(/\r\n/g, "\n");
       const fm = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? "";
       const field = (k: string) => new RegExp(`^${k}: (.*)$`, "m").exec(fm)?.[1]?.trim();
       const list = (k: string) => (field(k) ?? "").split(",").map((x) => x.trim()).filter(Boolean);

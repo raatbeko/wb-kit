@@ -9,5 +9,5 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["mcp/**/*.ts", "scripts/**/*.ts", "audit/**/*.ts", "competitors/**/*.ts", "card/**/*.ts", "vitest.config.ts"]
+  "include": ["mcp/**/*.ts", "scripts/**/*.ts", "audit/**/*.ts", "competitors/**/*.ts", "card/**/*.ts", "office/**/*.ts", "vitest.config.ts"]
 }
