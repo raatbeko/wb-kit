@@ -45,7 +45,7 @@ describe("хуки → офис", () => {
       "Передаю задачу: Логист",
       "Взялся за задачу",
       "Смотрю остатки на складах WB",
-      "Готово: Остатки",
+      "Готово: Кружка закончится через 6 дней",
       "Ответ готов — смотрите в Claude Code",
     ]);
   });
@@ -206,8 +206,21 @@ describe("подписи", () => {
     }
   });
 
+  it("у каждого инструмента WB (не только записи) есть понятная подпись", async () => {
+    const { toolDefinitions } = await import("../../mcp/wb/src/tools.js");
+    for (const name of Object.keys(toolDefinitions)) expect(describeTool(`mcp__wb__${name}`).text, name).not.toMatch(/^запрос к WB/);
+  });
+
+  it("нет ключа WB — «не настроен», а не «не принял»", () => {
+    const s = office();
+    handleHook(s, { ...inRole("logist"), hook_event_name: "PostToolUseFailure", tool_name: "mcp__wb__get_wb_stocks", error: "Ключ WB не настроен: вставьте его в .env" });
+    expect(s.recentEvents()[0]?.message).toContain("не настроен");
+  });
+
   it("short и maskSecrets", () => {
-    expect(short("\n\n## **Итог**\nвторая строка")).toBe("Итог");
+    expect(short("## Главное\n- Кружка кончится через 6 дней\n| a | b |")).toBe("Кружка кончится через 6 дней");
+    expect(short("|---|---|\n1. **Итог**")).toBe("Итог");
+    expect(short("## Только заголовок")).toBe("Только заголовок");
     expect(short("а".repeat(300)).length).toBe(160);
     expect(maskSecrets("ключ " + "x".repeat(40))).toBe("ключ •••");
   });

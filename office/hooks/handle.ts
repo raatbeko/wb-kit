@@ -146,6 +146,12 @@ export function handleHook(store: OfficeStore, h: HookInput, opts: HookOptions =
         const a = pendingFor(wb);
         if (a) store.resolveApproval(a.id, "failed");
       }
+      // Ключа нет вовсе — это не «WB не принял», а «надо вписать».
+      if (/не настроен|not configured|WB_API_TOKEN/i.test(err)) {
+        status("error", "нет ключа WB — нужен /setup");
+        store.addEvent({ kind: "agent_error", agentId, message: "Ключ WB не настроен: запустите /setup в Claude Code", data });
+        return;
+      }
       // 401 от WB — проблема ключа: её видно в офисе красной лампой, а не только в чате.
       if (/401|unauthori[sz]ed|токен|token/i.test(err)) {
         status("error", "WB не принял ключ — нужен /setup");

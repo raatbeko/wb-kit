@@ -22,8 +22,25 @@ const WB: Record<string, string> = {
   get_fbs_stocks: "смотрю остатки FBS",
   get_ad_costs: "считаю расходы на рекламу",
   get_campaign_stats: "смотрю статистику кампаний",
-  list_feedbacks: "читаю отзывы",
-  list_questions: "читаю вопросы покупателей",
+  get_feedbacks: "читаю отзывы",
+  get_questions: "читаю вопросы покупателей",
+  get_unanswered_counts: "считаю отзывы без ответа",
+  get_seller_rating: "смотрю рейтинг продавца",
+  get_jam_subscription: "проверяю подписку «Джем»",
+  list_seller_warehouses: "смотрю свои склады",
+  get_orders: "смотрю заказы",
+  get_sales: "смотрю продажи",
+  get_fbs_new_orders: "смотрю новые заказы FBS",
+  get_fbs_orders: "смотрю заказы FBS",
+  list_fbs_supplies: "смотрю поставки FBS",
+  get_fbs_supply_barcode: "готовлю штрихкод поставки",
+  get_paid_storage: "считаю платное хранение",
+  get_search_texts: "смотрю поисковые запросы",
+  get_acceptance_coefficients: "смотрю коэффициенты приёмки",
+  list_campaigns: "смотрю рекламные кампании",
+  get_campaigns_info: "смотрю настройки кампаний",
+  get_ad_balance: "смотрю рекламный бюджет",
+  get_promotions: "смотрю акции WB",
   update_prices: "меняю цены",
   update_fbs_stocks: "меняю остатки FBS",
   create_fbs_supply: "создаю поставку FBS",
@@ -75,13 +92,16 @@ export function maskSecrets(s: string): string {
   return s.replace(/[A-Za-z0-9._\-+/=]{20,}/g, "•••");
 }
 
-/** Короткая строка для ленты: первая непустая строка, без markdown-шума, не длиннее `max`. */
+/**
+ * Короткая строка для ленты: первая содержательная строка без markdown-шума,
+ * не длиннее `max`. Заголовки («## Главное») и разделители таблиц пропускаем —
+ * роли отвечают по форме, и суть идёт под заголовком.
+ */
 export function short(s: string | undefined | null, max = 160): string {
-  const line =
-    String(s ?? "")
-      .split(/\r?\n/)
-      .map((l) => l.replace(/^[#>*\-\s]+/, "").replace(/\*\*/g, "").trim())
-      .find(Boolean) ?? "";
+  const lines = String(s ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const isNoise = (l: string) => /^#{1,6}\s/.test(l) || /^\|?[\s:|-]+\|?$/.test(l) || /^-{3,}$/.test(l);
+  const clean = (l: string) => l.replace(/^[#>*\-\s]+/, "").replace(/\*\*/g, "").replace(/^\d+\.\s+/, "").trim();
+  const line = clean(lines.find((l) => !isNoise(l)) ?? lines[0] ?? "");
   const m = maskSecrets(line);
   return m.length > max ? m.slice(0, max - 1).trimEnd() + "…" : m;
 }
