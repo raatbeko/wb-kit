@@ -50,6 +50,12 @@ describe("хуки → офис", () => {
     ]);
   });
 
+  it("передача задачи знает адресата — в 3D от директора к нему летит лист", () => {
+    const s = office();
+    handleHook(s, { ...base, hook_event_name: "PreToolUse", tool_name: "Agent", tool_input: { subagent_type: "finance" } });
+    expect(s.recentEvents()[0]?.data).toMatchObject({ to: "finance" });
+  });
+
   it("чтение файлов меняет подпись, но не засоряет ленту", () => {
     const s = office();
     handleHook(s, { ...inRole("analyst"), hook_event_name: "PreToolUse", tool_name: "Read", tool_input: { file_path: "reports/x" } });

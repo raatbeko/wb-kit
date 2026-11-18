@@ -104,12 +104,18 @@ export function safeJoin(root: string, rel: string): string | null {
   return file;
 }
 
-function sendFile(res: ServerResponse, file: string | null, opts: { download?: boolean; sandbox?: boolean } = {}) {
+function sendFile(res: ServerResponse, file: string | null, opts: { download?: boolean; sandbox?: boolean; host?: string } = {}) {
   if (!file || !existsSync(file) || !statSync(file).isFile()) return sendJson(res, 404, { error: "Не найдено" });
   const headers: Record<string, string> = { ...SECURITY_HEADERS, "content-type": TYPES[extname(file).toLowerCase()] ?? "application/octet-stream" };
   // Отчёты пишет Claude из данных WB и отзывов покупателей. В «песочнице» скрипт из отчёта
   // не получит адрес офиса и не сможет нажать «Одобрить» через API.
-  if (opts.sandbox) headers["content-security-policy"] = "sandbox allow-popups allow-popups-to-escape-sandbox; frame-ancestors 'none'";
+  // Отчёт можно показать во фрейме только на самой странице офиса, чужой сайт его не встроит.
+  // Адрес офиса — явно: у документа в песочнице «пустое» происхождение, и 'self' ни с чем не совпал бы.
+  if (opts.sandbox) {
+    const self = opts.host && LOCAL_HOSTS.test(opts.host) ? `http://${opts.host}` : "'none'";
+    headers["content-security-policy"] = `sandbox allow-popups allow-popups-to-escape-sandbox; frame-ancestors ${self}`;
+    headers["x-frame-options"] = "SAMEORIGIN";
+  }
   if (opts.download) headers["content-disposition"] = `attachment; filename*=UTF-8''${encodeURIComponent(file.split(sep).pop()!)}`;
   res.writeHead(200, headers);
   res.end(readFileSync(file));
@@ -284,7 +290,7 @@ export function handle(deps: AppDeps) {
       // Отчёты Claude Code: reports/… (Excel — скачиванием).
       if (p.startsWith("/reports/")) {
         const file = safeJoin(reportsDir, p.slice("/reports/".length));
-        return sendFile(res, file, { download: file?.endsWith(".xlsx"), sandbox: true });
+        return sendFile(res, file, { download: file?.endsWith(".xlsx"), sandbox: true, host: req.headers.host });
       }
       // three.js из node_modules — без сборки фронта и без интернета.
       if (p.startsWith("/vendor/three/")) return sendFile(res, safeJoin(THREE_DIR, p.slice("/vendor/three/".length)));

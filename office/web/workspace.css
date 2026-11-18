@@ -1,0 +1,111 @@
+/* ===== Рабочий стол сотрудника, таблицы, графики, окно просмотра ===== */
+.panel.wide { width: min(780px, 68vw); padding: 0; }
+.panel.full { width: 100%; }
+.panel-ctl { position: sticky; top: 0; z-index: 3; display: flex; justify-content: flex-end; gap: 4px; padding: 8px 10px 0; height: 0; overflow: visible; }
+.ctl { width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--muted); font-size: 18px; line-height: 1; display: grid; place-items: center; }
+.ctl:hover { color: var(--text); border-color: var(--accent); }
+#panel-body { padding: 18px 18px 40px; }
+.ws-head { padding: 18px 96px 6px 20px; }
+.ws-who { display: flex; gap: 12px; align-items: center; }
+.ws-who h2 { margin: 0; font-size: 21px; }
+.ws-title { font-size: 13px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+.ws-who .st { margin: 2px 0 0; }
+.avatar.big { width: 46px; height: 46px; font-size: 19px; }
+.headline { margin: 12px 0 10px; font-size: 17px; font-weight: 600; line-height: 1.35; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border-left: 3px solid var(--accent); }
+.headline.muted { font-weight: 400; font-size: 14px; background: var(--surface-2); border-left-color: var(--line); }
+.ws-tabs { position: sticky; top: 0; z-index: 2; display: flex; gap: 2px; padding: 0 16px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.ws-tabs button { border: 0; background: transparent; padding: 10px 12px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 600; }
+.ws-tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.ws-tabs button:hover { color: var(--text); }
+.ws-body { padding: 14px 20px 48px; }
+.ws-body h3 { margin: 20px 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.ws-body h4 { margin: 18px 0 8px; font-size: 14px; }
+.ws-charts { border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 14px 12px; background: var(--surface-2); }
+.ws-table-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ws-table-head h3 { margin-top: 6px; }
+.only-problems { font-size: 13px; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.issue .d { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 2px 9px; font-size: 12px; margin: 4px 4px 0 0; }
+.chip:hover { border-color: var(--accent); color: var(--accent); }
+.small { font-size: 12px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.hint-box { border: 1px dashed var(--line); border-radius: 10px; padding: 12px; background: var(--surface-2); font-size: 14px; }
+.qa { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+.qa .q { font-weight: 600; margin-bottom: 6px; }
+.card-h { font-weight: 600; font-size: 13px; line-height: 1.35; }
+.card-more { font-size: 12px; color: var(--accent); margin-top: auto; }
+
+/* Таблица */
+.tbl-tools { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+.tbl-search { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: var(--surface); color: var(--text); font: inherit; }
+.btn.small { padding: 4px 10px; font-size: 12px; }
+.tbl-wrap { overflow: auto; max-height: 62vh; border: 1px solid var(--line); border-radius: 10px; }
+.panel.full .tbl-wrap { max-height: calc(100vh - 300px); }
+.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tbl th { position: sticky; top: 0; background: var(--surface-2); z-index: 1; text-align: left; border-bottom: 1px solid var(--line); padding: 0; white-space: nowrap; }
+.tbl th button { width: 100%; text-align: inherit; border: 0; background: transparent; padding: 7px 8px; font-weight: 600; color: var(--muted); }
+.tbl th button:hover { color: var(--text); }
+.tbl th.num { text-align: right; }
+.tbl th .arr { margin-left: 4px; font-size: 10px; color: var(--accent); }
+.tbl td { padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: top; }
+.tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.tbl tr.clickable { cursor: pointer; }
+.tbl tbody tr:hover td, .tbl tbody tr:focus-visible td { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.t-bad { color: var(--bad); font-weight: 600; }
+.t-warn { color: var(--warn); font-weight: 600; }
+.t-ok { color: var(--ok); }
+
+/* Графики */
+.chart { position: relative; margin: 12px 0 4px; }
+.chart figcaption { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.chart svg { width: 100%; height: 170px; display: block; overflow: visible; }
+.chart .bar path { fill: var(--accent); opacity: .85; }
+.chart .bar.on path { opacity: 1; }
+.chart .bar.partial path { opacity: .35; }
+.chart .base { stroke: var(--line); stroke-width: 1; }
+.chart text { fill: var(--muted); font-size: 11px; }
+.chart .tip { position: absolute; pointer-events: none; background: var(--text); color: var(--bg); font-size: 12px; padding: 4px 8px; border-radius: 6px; white-space: nowrap; }
+.hbars { display: flex; flex-direction: column; gap: 9px; }
+.hbar-l { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.hbar-l span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hbar-l b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hbar-track { height: 8px; border-radius: 4px; background: var(--line); margin-top: 3px; overflow: hidden; }
+.hbar-fill { height: 100%; border-radius: 4px; background: var(--accent); }
+.hbar-sub { font-size: 12px; margin-top: 2px; }
+
+/* Отчёты */
+.rep-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rep { width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--surface); display: flex; flex-direction: column; gap: 2px; }
+.rep:hover { border-color: var(--accent); }
+.rep-t { font-weight: 600; }
+.rep-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-right: 40px; margin-bottom: 10px; }
+.rep-frame { width: 100%; height: calc(100vh - 190px); border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+
+/* Окно просмотра */
+.modal { border: 1px solid var(--line); border-radius: 14px; padding: 20px; width: min(760px, calc(100% - 32px)); max-height: calc(100vh - 48px); background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.modal.wide { width: min(1200px, calc(100% - 32px)); }
+.modal::backdrop { background: rgba(20, 15, 25, .45); backdrop-filter: blur(2px); }
+.modal-x { position: absolute; top: 12px; right: 12px; }
+.modal h2 { margin: 0 40px 4px 0; font-size: 20px; }
+.pcard .pc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin-top: 12px; }
+.pcard section { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.pcard h4 { margin: 2px 0 6px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.kv { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; padding: 3px 0; }
+.kv span { color: var(--muted); }
+.kv b { font-variant-numeric: tabular-nums; text-align: right; }
+.pc-issues { margin-top: 10px; }
+
+/* Подсказка при наведении в 3D */
+.hover-tip { position: absolute; z-index: 3; pointer-events: none; max-width: 300px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; box-shadow: var(--shadow); font-size: 13px; }
+.hover-tip b { display: block; }
+.hover-tip .muted { font-size: 12px; }
+.hover-tip .h { margin-top: 4px; }
+.hover-tip .go { margin-top: 4px; font-size: 12px; color: var(--accent); }
+.feed li.link { cursor: pointer; }
+.kpi.fresh .v { font-weight: 400; font-size: 13px; }
+
+@media (max-width: 760px) {
+  .panel.wide { width: 100%; }
+  #panel-full { display: none; }
+  .ws-head { padding-right: 56px; }
+}

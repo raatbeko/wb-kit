@@ -3,7 +3,7 @@
  * что показывают экраны и столы сотрудников, и раскладываем проблемы по
  * ответственным. Считать заново ничего не нужно — расчёты общие с /audit.
  */
-import type { AuditReport, Issue, Kpi } from "../../audit/analyze.js";
+import type { AuditReport, Issue, Kpi, ProductLine } from "../../audit/analyze.js";
 
 /** Кто в офисе отвечает за проблему аудита. */
 export const ISSUE_OWNER: Record<string, string> = {
@@ -28,19 +28,19 @@ export interface SnapshotIssue extends Omit<Issue, "products"> {
   products: Issue["products"];
 }
 
-export interface SnapshotProduct {
+/** Товар — все расчёты аудита по нему (продажи, остатки, воронка, деньги, карточка). */
+export type SnapshotProduct = ProductLine;
+
+/** Отзыв для менеджера отзывов. Имён покупателей в данных WB тут нет. */
+export interface SnapshotFeedback {
+  createdDate: string;
+  rating: number;
+  text: string;
+  cons: string;
+  answered: boolean;
   nmId: number;
   vendorCode: string;
-  title: string;
-  abc: string;
-  ordersSum: number;
-  ordersDelta: number | null;
-  perDay: number;
-  stock: number | null;
-  daysOfStock: number | null;
-  buyoutPercent: number | null;
-  rating: number | null;
-  negative: number;
+  product: string;
 }
 
 /** Цифры «на столе» сотрудника: 2–3 главных показателя его участка. */
@@ -61,6 +61,16 @@ export interface Snapshot {
   weekly: { week: string; ordersSum: number; buyoutsSum: number }[];
   unavailable: { section: string; reason: string }[];
   desks: Record<string, DeskStat[]>;
+  /** Деньги по финотчёту WB (итоги периода) — для финансиста. */
+  finance: Record<string, number> | null;
+  /** Реклама — для маркетолога. */
+  ads: { total: number; campaigns: { advertId: number; campName: string; spent: number }[] } | null;
+  /** Отзывы: последние негативные и счётчики без ответа. */
+  feedbacks: { unansweredFeedbacks: number; unansweredQuestions: number; negative: SnapshotFeedback[] } | null;
+  /** Остатки по складам WB — для логиста. */
+  warehouses: { name: string; quantity: number }[];
+  /** ABC: сколько товаров в каждой группе и их доля выручки. */
+  abc: Record<string, unknown> | null;
 }
 
 const rub = (n: number | null | undefined) =>
@@ -135,22 +145,30 @@ export function buildSnapshot(r: AuditReport): Snapshot {
     generatedAt: d.generatedAt,
     kpis: r.kpis,
     issues,
-    products: r.products.slice(0, 200).map((p) => ({
-      nmId: p.nmId,
-      vendorCode: p.vendorCode,
-      title: p.title,
-      abc: p.abc,
-      ordersSum: p.ordersSum,
-      ordersDelta: p.ordersDelta,
-      perDay: p.perDay,
-      stock: p.stock,
-      daysOfStock: p.daysOfStock,
-      buyoutPercent: p.buyoutPercent,
-      rating: p.rating,
-      negative: p.negative,
-    })),
+    // До 300 товаров: таблицы сотрудников сортируются и фильтруются в браузере.
+    products: r.products.slice(0, 300),
     weekly: d.sales.ok ? d.sales.data.weekly.map((w) => ({ week: w.weekStart, ordersSum: w.ordersSum, buyoutsSum: w.buyoutsSum })) : [],
     unavailable: r.unavailable,
     desks: desks(r, issues),
+    finance: d.finance.ok ? (d.finance.data.totals as unknown as Record<string, number>) : null,
+    ads: d.ads.ok ? { total: d.ads.data.total, campaigns: [...d.ads.data.campaigns].sort((a, b) => b.spent - a.spent).slice(0, 50) } : null,
+    feedbacks: d.feedbacks.ok
+      ? {
+          unansweredFeedbacks: d.feedbacks.data.unansweredFeedbacks,
+          unansweredQuestions: d.feedbacks.data.unansweredQuestions,
+          negative: r.negativeFeedbacks.slice(0, 40).map((f) => ({
+            createdDate: f.createdDate, rating: f.rating, text: f.text, cons: f.cons, answered: f.answered, nmId: f.nmId, vendorCode: f.vendorCode, product: f.product,
+          })),
+        }
+      : null,
+    warehouses: d.stocks.ok ? warehouseTotals(d.stocks.data.products) : [],
+    abc: d.abc.ok ? (d.abc.data.summary as unknown as Record<string, unknown>) : null,
   };
+}
+
+/** Сумма остатков по складам WB, от большего к меньшему. */
+function warehouseTotals(products: { warehouses: Record<string, number> }[]): { name: string; quantity: number }[] {
+  const m = new Map<string, number>();
+  for (const p of products) for (const [name, q] of Object.entries(p.warehouses)) m.set(name, (m.get(name) ?? 0) + q);
+  return [...m].map(([name, quantity]) => ({ name, quantity })).sort((a, b) => b.quantity - a.quantity);
 }

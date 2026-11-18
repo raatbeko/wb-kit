@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WB Офис</title>
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/workspace.css">
 <script type="importmap">
 { "imports": {
   "three": "/vendor/three/build/three.module.js",
@@ -36,11 +37,20 @@
     <ol id="feed"></ol>
   </section>
 
-  <aside id="panel" class="panel" hidden aria-live="polite">
-    <button id="panel-close" class="close" type="button" aria-label="Закрыть">×</button>
+  <aside id="panel" class="panel" hidden>
+    <div class="panel-ctl">
+      <button id="panel-full" class="ctl" type="button" title="Развернуть на весь экран" aria-label="Развернуть на весь экран">⤢</button>
+      <button id="panel-close" class="ctl" type="button" title="Закрыть (Esc)" aria-label="Закрыть">×</button>
+    </div>
+    <div id="ws" class="ws" hidden></div>
     <div id="panel-body"></div>
   </aside>
 </main>
+
+<dialog id="modal" class="modal" aria-label="Просмотр">
+  <button id="modal-close" class="ctl modal-x" type="button" aria-label="Закрыть">×</button>
+  <div id="modal-body"></div>
+</dialog>
 
 <div id="notice" class="notice" hidden></div>
 

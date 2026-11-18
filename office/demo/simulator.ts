@@ -103,6 +103,11 @@ export function startDemo(store: OfficeStore, getSnapshot: () => Snapshot | unde
     const b = beats[i]!;
     if (step === 0) {
       store.setAgentStatus(b.agent, "working", b.steps[0]);
+      if (b.agent !== "director") {
+        // Как в настоящем офисе: задачу раздаёт директор (в 3D — летящий от него лист).
+        const name = store.getAgent(b.agent)?.name ?? b.agent;
+        store.addEvent({ kind: "agent_step", agentId: "director", message: `Передаю задачу: ${name}`, data: { demo: true, to: b.agent } });
+      }
       store.addEvent({ kind: "agent_started", agentId: b.agent, message: "Взялся за задачу", data: { demo: true } });
     }
     if (step < b.steps.length) {

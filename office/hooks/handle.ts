@@ -126,7 +126,7 @@ export function handleHook(store: OfficeStore, h: HookInput, opts: HookOptions =
       if (tool === "Agent" || tool === "Task") {
         const role = String(h.tool_input?.subagent_type ?? "");
         if (STAFF_IDS.has(role)) {
-          store.addEvent({ kind: "agent_step", agentId: "director", message: `Передаю задачу: ${nameOf(store, role)}`, data });
+          store.addEvent({ kind: "agent_step", agentId: "director", message: `Передаю задачу: ${nameOf(store, role)}`, data: { ...data, to: role } });
           return;
         }
       }

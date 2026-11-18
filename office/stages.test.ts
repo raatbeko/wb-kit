@@ -243,7 +243,10 @@ describe("сервер: защита и одобрения", () => {
       const page = await head("/");
       expect(page["x-frame-options"]).toBe("DENY");
       expect(String(page["content-security-policy"])).toContain("frame-ancestors 'none'");
-      expect(String((await head("/reports/audit-2026-11-19/a.html"))["content-security-policy"])).toMatch(/^sandbox/);
+      const rep = String((await head("/reports/audit-2026-11-19/a.html"))["content-security-policy"]);
+      expect(rep).toMatch(/^sandbox/);
+      // Встроить отчёт можно только в страницу офиса (адрес явно — у песочницы нет своего происхождения).
+      expect(rep).toContain(`frame-ancestors http://localhost:${port}`);
     } finally {
       await close();
     }
