@@ -9,6 +9,7 @@
       "Bash(npm run audit:*)",
       "Bash(npm run competitors:*)",
       "Bash(npm run card:*)",
+      "Bash(npm run office:*)",
       "Write(./reports/**)",
       "Edit(./reports/**)",
       "Bash(npm install)",

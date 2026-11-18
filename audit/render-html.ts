@@ -66,8 +66,20 @@ export function markdownToHtml(md: string): string {
     if (list) out.push(`</${list}>`);
     list = null;
   };
-  for (const raw of lines) {
-    const line = raw.trim();
+  // Таблица: подряд идущие строки «| a | b |», вторая — разделитель «|---|---|».
+  const cells = (l: string) => l.replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!.trim();
+    if (line.startsWith("|") && /^\|?\s*:?-{2,}/.test(lines[i + 1]?.trim() ?? "")) {
+      close();
+      const head = cells(line);
+      const rows: string[][] = [];
+      i += 2;
+      while (i < lines.length && lines[i]!.trim().startsWith("|")) rows.push(cells(lines[i++]!.trim()));
+      i--;
+      out.push(`<div class="table-wrap"><table><thead><tr>${head.map((h) => `<th>${inline(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+      continue;
+    }
     if (!line) {
       close();
       continue;
