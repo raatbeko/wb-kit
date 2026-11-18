@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Аудит WB — Уютный дом — 19.10.2026 — 17.11.2026</title>
+<style>
+:root{--bg:#f6f5f2;--card:#fff;--text:#1d1d1f;--muted:#6b6b70;--line:#e4e2dc;--accent:#7b2cbf;--accent2:#c9a8ee;--good:#1f8a4c;--bad:#c62f3a;--warn:#b86e00;--chip-high:#fde7e9;--chip-med:#fff1d6;--chip-low:#eef0f3}
+@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1d1d21;--text:#ececef;--muted:#9a9aa3;--line:#2e2e34;--accent:#b07cf0;--accent2:#5b3a85;--good:#4cc27e;--bad:#ff6b73;--warn:#f0a63a;--chip-high:#3a1e22;--chip-med:#3a2e17;--chip-low:#26282d}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 16px 48px}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end;margin-bottom:20px}
+h1{font-size:26px;margin:0}h2{font-size:19px;margin:0 0 14px}h3{font-size:16px;margin:6px 0}
+.sub{color:var(--muted)}.badge{background:var(--accent);color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;margin-left:8px;vertical-align:middle}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin:16px 0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.kpi-label{color:var(--muted);font-size:13px}.kpi-value{font-size:22px;font-weight:650;margin:2px 0;font-variant-numeric:tabular-nums}
+.kpi-foot{font-size:12px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap}.delta.up{color:var(--good)}.delta.down{color:var(--bad)}
+.insights{border-left:4px solid var(--accent)}.insights p,.insights li{max-width:75ch}
+.issues{display:grid;gap:12px}.issue{border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.issue.high{border-left:4px solid var(--bad)}.issue.medium{border-left:4px solid var(--warn)}.issue.low{border-left:4px solid var(--line)}
+.issue-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.num{font-weight:700;color:var(--muted)}
+.chip{font-size:12px;border-radius:999px;padding:2px 9px;font-weight:600}.chip.high{background:var(--chip-high);color:var(--bad)}.chip.medium{background:var(--chip-med);color:var(--warn)}.chip.low{background:var(--chip-low);color:var(--muted)}
+.impact{font-size:12px;color:var(--bad);font-weight:600}.action{background:var(--bg);border-radius:8px;padding:8px 10px}
+.products{margin:8px 0 0;padding-left:18px}.products li{margin:2px 0}details summary{cursor:pointer;color:var(--accent);margin-top:4px}
+.muted{color:var(--muted)}.small{font-size:12px}.note{color:var(--muted);font-size:13px;margin:10px 0 0}
+.chart{width:100%;height:auto}.chart .grid{stroke:var(--line)}.chart .axis{fill:var(--muted);font-size:11px}
+.bar-orders{fill:var(--accent)}.bar-buyouts{fill:var(--accent2)}.partial{opacity:.45}
+.legend{display:flex;gap:16px;font-size:13px;color:var(--muted);flex-wrap:wrap}.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}.sw.orders{background:var(--accent)}.sw.buyouts{background:var(--accent2)}
+.abc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}.abc-card{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:2px}
+.abc-card b{font-size:22px}.abc-card small{color:var(--muted)}
+.abc{display:inline-block;min-width:22px;border-radius:6px;font-weight:700;font-size:12px;padding:1px 6px}.abc.A{background:var(--accent);color:#fff}.abc.B{background:var(--accent2)}.abc.C{background:var(--chip-low);color:var(--muted)}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap;position:sticky;top:0;background:var(--card)}
+td{border-bottom:1px solid var(--line);padding:7px 8px;vertical-align:top}td.r,th.r{text-align:right}td.c{text-align:center}td.bad{color:var(--bad);font-weight:600}tfoot td{font-weight:650}
+.products-table td:first-child{min-width:190px}
+.money{display:grid;gap:6px}.money-row{display:grid;grid-template-columns:minmax(150px,280px) 1fr minmax(110px,auto);gap:10px;align-items:center}
+.money-bar{background:var(--bg);border-radius:4px;height:12px;overflow:hidden}.money-bar i{display:block;height:100%;border-radius:4px}
+.money-row.pos i{background:var(--good)}.money-row.neg i{background:var(--bad)}.money-row.total i{background:var(--accent)}.money-row.total{font-weight:700;border-top:1px solid var(--line);padding-top:6px}.money-val{text-align:right;font-variant-numeric:tabular-nums}
+.reviews{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}blockquote{margin:0;border:1px solid var(--line);border-radius:10px;padding:10px 12px}.stars{color:var(--warn);font-size:13px;margin-bottom:4px}
+code{background:var(--bg);border-radius:4px;padding:1px 5px}footer{color:var(--muted);font-size:13px;text-align:center;margin-top:24px}
+@media (max-width:600px){.money-row{grid-template-columns:1fr auto}.money-bar{grid-column:1/-1;order:3}h1{font-size:22px}.kpis{grid-template-columns:1fr 1fr}.kpi-value{font-size:18px}section{padding:16px}}
+@media print{body{background:#fff}section{break-inside:avoid}}
+</style></head>
+<body><div class="wrap">
+<header><div><h1>Аудит кабинета WB<span class="badge">ДЕМО</span></h1><div class="sub">Уютный дом · 19.10.2026 — 17.11.2026 (30 дн.) · сравнение с 19.09.2026 — 18.10.2026</div></div>
+<div class="sub">Сформирован 18 ноября 2026 г. в 14:51</div></header>
+<div class="kpis"><div class="kpi"><div class="kpi-label">Заказы</div><div class="kpi-value">3 253 116 ₽</div><div class="kpi-foot"><span class="delta down">▼ 6,8%</span><span>2740 шт</span></div></div><div class="kpi"><div class="kpi-label">Выкупы</div><div class="kpi-value">2 620 621 ₽</div><div class="kpi-foot"><span class="delta down">▼ 2,9%</span><span>2148 шт</span></div></div><div class="kpi"><div class="kpi-label">Выкуп</div><div class="kpi-value">81%</div><div class="kpi-foot"><span>выкупы к заказам без отмен, приблизительно</span></div></div><div class="kpi"><div class="kpi-label">К перечислению</div><div class="kpi-value">1 877 995 ₽</div><div class="kpi-foot"><span>за выкупы минус возвраты, до логистики и хранения</span></div></div><div class="kpi"><div class="kpi-label">Реклама</div><div class="kpi-value">583 420 ₽</div><div class="kpi-foot"></div></div><div class="kpi"><div class="kpi-label">ДРР</div><div class="kpi-value">17,9%</div><div class="kpi-foot"><span>расходы на рекламу к сумме заказов</span></div></div><div class="kpi"><div class="kpi-label">На руки (оценка)</div><div class="kpi-value">1 503 655 ₽</div><div class="kpi-foot"><span>по финотчёту WB, до себестоимости, налогов и рекламы</span></div></div><div class="kpi"><div class="kpi-label">На складах WB</div><div class="kpi-value">4 389 шт</div><div class="kpi-foot"></div></div><div class="kpi"><div class="kpi-label">Рейтинг продавца</div><div class="kpi-value">4,6 ★</div><div class="kpi-foot"></div></div><div class="kpi"><div class="kpi-label">Без ответа</div><div class="kpi-value">30</div><div class="kpi-foot"><span>отзывов 26, вопросов 4</span></div></div></div>
+<section class="insights"><h2>Главное</h2><p>Это демо-отчёт: магазин «Уютный дом» выдуман, чтобы показать, как выглядит аудит.</p>
+<h3>Главные выводы</h3>
+<ul>
+<li><strong>Магазин стабилен, но теряет деньги на мелочах.</strong> Заказы за 30 дней — 3,25 млн ₽, на 6,8% меньше прошлого месяца. На руки по отчёту WB — около 1,5 млн ₽ до себестоимости и налогов.</li>
+<li><strong>Закончился плед 200×220</strong> — товар группы A. Пока его нет, уходит около 20 тыс. ₽ заказов в день, примерно 145 тыс. ₽ за неделю. Ещё четыре товара закончатся в ближайшие две недели, включая главный хит — серый плед (запас на 7 дней).</li>
+<li><strong>Реклама дорогая: ДРР почти 18%.</strong> На неё ушло 583 тыс. ₽. Дороже всех кампания «Тапочки — каталог» — 287 тыс. ₽ на товар, который выкупают только в 37% случаев. «Пледы — поиск» (176 тыс. ₽) продвигает пледы, которых нет или почти нет на складе.</li>
+<li><strong>Тапочки и халат чаще не выкупают, чем выкупают.</strong> Выкуп 37% и 48%: за каждый невыкуп вы платите логистику в обе стороны. Покупатели пишут, что тапочки маломерят.</li>
+<li><strong>Деньги лежат на складе.</strong> Короба для хранения и набор полотенец — запаса на 195–430 дней, ночник и фоторамка не продаются вообще. Всё это каждый день копит платное хранение (118 тыс. ₽ за месяц по магазину).</li>
+</ul>
+<h3>План на эту неделю</h3>
+<ol>
+<li>Отгрузить поставку бежевого пледа 200×220, следом — серый плед, подушки, свечи и диффузор.</li>
+<li>Поставить на паузу рекламу пледов, пока нет остатка, и рекламу тапочек, пока не исправлена размерная сетка.</li>
+<li>Тапочки и халат: уточнить таблицу размеров, добавить в описание «маломерят, берите на размер больше» и фото на ноге и на модели.</li>
+<li>Переделать карточку кружки: её открыли 21 тыс. раз, а в корзину положили только 3%. Нужны 6–8 фото с инфографикой, видео и описание от 1000 символов.</li>
+<li>Запустить акцию на короба и полотенца и не возить их, пока запас не опустится до 60 дней. Ночник и фоторамку — распродать или вывезти.</li>
+<li>Ответить на 26 отзывов и 4 вопроса без ответа.</li>
+</ol>
+<h3>О чём жалуются покупатели</h3>
+<ul>
+<li><strong>Качество органайзера</strong> — расходятся швы, пришёл с браком (4 негативных отзыва из 19). Стоит поговорить с поставщиком и проверять партию перед отгрузкой.</li>
+<li><strong>Размер тапочек</strong> — «маломерят», «не соответствует таблице». Это же объясняет низкий выкуп.</li>
+<li><strong>Цвет не совпадает с фото</strong> — пледы, полотенца, детское одеяло. Переснять фото при дневном свете без сильной обработки.</li>
+<li><strong>Помятая упаковка и долгая доставка</strong> — частые, но не критичные жалобы. На упаковку можно повлиять: плотнее пакет или короб.</li>
+</ul></section>
+<section><h2>Что сделать</h2><div class="issues"><article class="issue high">
+  <div class="issue-head"><span class="num">1</span><span class="chip high">Срочно</span><span class="impact">≈ 144 701 ₽ за неделю</span></div>
+  <h3>Закончились товары, которые продаются: 1</h3>
+  <p>Пока товара нет на складах WB, заказы уходят конкурентам — примерно 20 672 ₽ заказов в день. Карточка без остатка ещё и теряет позиции в поиске.</p>
+  <p class="action"><b>Что сделать:</b> Срочно отгрузить поставку. Посмотрите коэффициенты приёмки: где сейчас можно сдать быстро и дёшево.</p>
+  <ul class="products"><li><b>PLAID-BEIGE-200</b> <span class="muted">Плед вязаный 200×220 бежевый</span> — в день было заказов на 20 672 ₽</li></ul>
+</article><article class="issue high">
+  <div class="issue-head"><span class="num">2</span><span class="chip high">Срочно</span></div>
+  <h3>Скоро закончатся (меньше 14 дней): 4</h3>
+  <p>Запаса хватит меньше чем на две недели при текущем темпе заказов. Поставка до склада WB обычно идёт 5–10 дней.</p>
+  <p class="action"><b>Что сделать:</b> Запланировать поставку на этой неделе, начиная с товаров группы A.</p>
+  <ul class="products"><li><b>DIFFUSER-100</b> <span class="muted">Диффузор ароматический 100 мл</span> — ≈ 2 дн., остаток 4 шт</li><li><b>CANDLE-SOY-200</b> <span class="muted">Свеча соевая в банке 200 г</span> — ≈ 3 дн., остаток 25 шт</li><li><b>PILLOW-50x70</b> <span class="muted">Подушка 50×70 бамбук</span> — ≈ 5 дн., остаток 60 шт</li><li><b>PLAID-GREY-150</b> <span class="muted">Плед флисовый 150×200 серый</span> — ≈ 7 дн., остаток 120 шт</li></ul>
+</article><article class="issue high">
+  <div class="issue-head"><span class="num">3</span><span class="chip high">Срочно</span></div>
+  <h3>Карточки, которые смотрят, но не кладут в корзину: 2</h3>
+  <p>Конверсия из просмотра в корзину ниже 60% от средней по магазину (медиана 9%). Трафик есть, карточка его не удерживает.</p>
+  <p class="action"><b>Что сделать:</b> Усилить первые фото и инфографику, проверить цену против конкурентов, добавить видео, закрыть возражения в описании и ответах на отзывы.</p>
+  <ul class="products"><li><b>MUG-CERAMIC-400</b> <span class="muted">Кружка керамическая 400 мл</span> — в корзину 3% при 21164 переходах</li><li><b>CURTAIN-BLACK</b> <span class="muted">Штора блэкаут 150×270</span> — в корзину 4% при 4228 переходах</li></ul>
+</article><article class="issue high">
+  <div class="issue-head"><span class="num">4</span><span class="chip high">Срочно</span></div>
+  <h3>Низкий выкуп (меньше 60%): 2</h3>
+  <p>Каждый невыкуп — это логистика до покупателя и обратно за ваш счёт, а ещё он снижает позиции карточки.</p>
+  <p class="action"><b>Что сделать:</b> Проверить таблицу размеров, честность фото и описания, частые жалобы в отзывах; для одежды и обуви — добавить подсказку по размеру.</p>
+  <ul class="products"><li><b>BATHROBE-M</b> <span class="muted">Халат махровый женский</span> — выкуп ≈ 47.56% из 84 заказов</li><li><b>SLIPPERS-38-39</b> <span class="muted">Тапочки домашние меховые</span> — выкуп ≈ 37.07% из 211 заказов</li></ul>
+</article><article class="issue high">
+  <div class="issue-head"><span class="num">5</span><span class="chip high">Срочно</span></div>
+  <h3>Товары с жалобами в отзывах: 3</h3>
+  <p>За период у этих товаров много оценок 3★ и ниже. Негатив на первых местах снижает конверсию и выкуп.</p>
+  <p class="action"><b>Что сделать:</b> Разобрать жалобы (ниже — примеры), исправить причину в товаре или карточке, ответить на каждый негативный отзыв.</p>
+  <ul class="products"><li><b>ORGANIZER-6</b> <span class="muted">Органайзер для белья 6 ячеек</span> — 4 негативных из 19</li><li><b>BLANKET-KIDS</b> <span class="muted">Одеяло детское 110×140</span> — 3 негативных из 15</li><li><b>SLIPPERS-38-39</b> <span class="muted">Тапочки домашние меховые</span> — 2 негативных из 9</li></ul>
+</article><article class="issue medium">
+  <div class="issue-head"><span class="num">6</span><span class="chip medium">Важно</span></div>
+  <h3>Затоваривание (запас больше 120 дней): 2</h3>
+  <p>Товар лежит на складах дольше, чем продаётся, и каждый день копит платное хранение.</p>
+  <p class="action"><b>Что сделать:</b> Не везти новые поставки этих товаров; поднять продажи акцией или скидкой; часть остатка можно вывезти.</p>
+  <ul class="products"><li><b>BOX-STORAGE-3</b> <span class="muted">Короба для хранения 3 шт</span> — ≈ 429 дн., остаток 600 шт</li><li><b>TOWEL-SET-3</b> <span class="muted">Набор полотенец 3 шт хлопок</span> — ≈ 195 дн., остаток 1401 шт</li></ul>
+</article><article class="issue medium">
+  <div class="issue-head"><span class="num">7</span><span class="chip medium">Важно</span></div>
+  <h3>Лежат без заказов: 2</h3>
+  <p>За 30 дней ни одного заказа при остатке на складе. Это чистые расходы на хранение.</p>
+  <p class="action"><b>Что сделать:</b> Проверить карточки и цены этих товаров; если спроса нет — распродажа или вывоз со склада.</p>
+  <ul class="products"><li><b>FRAME-PHOTO-A4</b> <span class="muted">Рамка для фото А4</span> — остаток 141 шт</li><li><b>LAMP-NIGHT</b> <span class="muted">Ночник светодиодный</span> — остаток 85 шт</li></ul>
+</article><article class="issue medium">
+  <div class="issue-head"><span class="num">8</span><span class="chip medium">Важно</span></div>
+  <h3>Просели продажи важных товаров: 1</h3>
+  <p>Частые причины: закончился остаток на ключевых складах, выросла цена, конкуренты демпингуют, свежие негативные отзывы, остановилась реклама.</p>
+  <p class="action"><b>Что сделать:</b> По каждому товару проверить: остаток, цену, новые отзывы и позиции в поиске (команда /competitors покажет выдачу).</p>
+  <ul class="products"><li><b>BLANKET-KIDS</b> <span class="muted">Одеяло детское 110×140</span> — -39.47%: было 283 936 ₽, стало 171 868 ₽</li></ul>
+</article><article class="issue medium">
+  <div class="issue-head"><span class="num">9</span><span class="chip medium">Важно</span></div>
+  <h3>Без ответа: 26 отзывов и 4 вопроса</h3>
+  <p>Ответы продавца видят будущие покупатели. Неотвеченный вопрос — часто потерянный заказ.</p>
+  <p class="action"><b>Что сделать:</b> Ответить сегодня. Можно попросить Claude подготовить черновики ответов — отправка только после вашего «да».</p>
+  
+</article><article class="issue medium">
+  <div class="issue-head"><span class="num">10</span><span class="chip medium">Важно</span></div>
+  <h3>Карточки с пробелами в контенте: 4</h3>
+  <p>Ориентир: от 5 фото, видео, описание от 1000 символов с ключевыми запросами, от 10 заполненных характеристик — по ним WB показывает товар в фильтрах.</p>
+  <p class="action"><b>Что сделать:</b> Начать с товаров группы A и B. Claude может написать SEO-описание и подсказать, какие фото и инфографику добавить.</p>
+  <ul class="products"><li><b>MUG-CERAMIC-400</b> <span class="muted">Кружка керамическая 400 мл</span> — фото: 3, нет видео, описание 240 симв., характеристик 6</li><li><b>CURTAIN-BLACK</b> <span class="muted">Штора блэкаут 150×270</span> — описание 380 симв.</li><li><b>VASE-GLASS-25</b> <span class="muted">Ваза стеклянная 25 см</span> — фото: 4, нет видео</li><li><b>APRON-COTTON</b> <span class="muted">Фартук кухонный хлопок</span> — фото: 2, нет видео, описание 150 симв., характеристик 5</li></ul>
+</article><article class="issue medium">
+  <div class="issue-head"><span class="num">11</span><span class="chip medium">Важно</span></div>
+  <h3>Дорогая реклама: ДРР 17.93%</h3>
+  <p>На рекламу ушло 583 420 ₽ при заказах на 3 253 116 ₽. Ориентир для большинства категорий — до 15%.</p>
+  <p class="action"><b>Что сделать:</b> Проверить кампании по отдельности (статистика кампаний), остановить те, что не дают заказов, и не рекламировать товары с низким выкупом или без остатка.</p>
+  <ul class="products"><li><b>Тапочки — каталог</b> — потрачено 286 721 ₽</li><li><b>Пледы — поиск</b> — потрачено 176 423 ₽</li><li><b>Кружки — поиск</b> — потрачено 120 276 ₽</li></ul>
+</article><article class="issue low">
+  <div class="issue-head"><span class="num">12</span><span class="chip low">Можно позже</span></div>
+  <h3>Штрафы WB: 1 500 ₽</h3>
+  <p>Штрафы обычно за несоответствие поставки, маркировку или нарушение правил упаковки.</p>
+  <p class="action"><b>Что сделать:</b> Найти причины в отчёте о реализации (строки «Штраф») и устранить их в следующих поставках.</p>
+  
+</article></div><p class="note">Пороги — ориентиры из практики продавцов, а не правила WB: в разных категориях нормы разные.</p></section>
+<section><h2>Динамика по неделям</h2><svg viewBox="0 0 720 220" class="chart" role="img" aria-label="Заказы и выкупы по неделям"><line x1="64" x2="716" y1="192" y2="192" class="grid"/><text x="58" y="196" class="axis" text-anchor="end">0 т</text><line x1="64" x2="716" y1="102" y2="102" class="grid"/><text x="58" y="106" class="axis" text-anchor="end">412 т</text><line x1="64" x2="716" y1="12" y2="12" class="grid"/><text x="58" y="16" class="axis" text-anchor="end">824 т</text><g><title>Неделя с 31.08.2026: заказы 773 918 ₽ (625 шт), выкупы 645 651 ₽</title>
+<rect x="69.48" y="22.951116008314994" width="20.52" height="169.04888399168502" rx="2" class="bar-orders"/>
+<rect x="92" y="50.96880419099257" width="20.52" height="141.03119580900744" rx="2" class="bar-buyouts"/>
+<text x="91" y="212" class="axis" text-anchor="middle">31.08</text></g><g><title>Неделя с 07.09.2026: заказы 802 322 ₽ (634 шт), выкупы 600 410 ₽</title>
+<rect x="123.48" y="16.746757793491433" width="20.52" height="175.25324220650856" rx="2" class="bar-orders"/>
+<rect x="146" y="60.85091128847294" width="20.52" height="131.14908871152704" rx="2" class="bar-buyouts"/>
+<text x="145" y="212" class="axis" text-anchor="middle">07.09</text></g><g><title>Неделя с 14.09.2026: заказы 822 301 ₽ (662 шт), выкупы 654 178 ₽</title>
+<rect x="177.48" y="12.382693831586069" width="20.52" height="179.61730616841393" rx="2" class="bar-orders"/>
+<rect x="200" y="49.1062298177423" width="20.52" height="142.8937701822577" rx="2" class="bar-buyouts"/>
+<text x="199" y="212" class="axis" text-anchor="middle">14.09</text></g><g><title>Неделя с 21.09.2026: заказы 824 053 ₽ (655 шт), выкупы 636 866 ₽</title>
+<rect x="231.48" y="12" width="20.52" height="180" rx="2" class="bar-orders"/>
+<rect x="254" y="52.88773416272982" width="20.52" height="139.11226583727017" rx="2" class="bar-buyouts"/>
+<text x="253" y="212" class="axis" text-anchor="middle">21.09</text></g><g><title>Неделя с 28.09.2026: заказы 815 459 ₽ (656 шт), выкупы 674 694 ₽</title>
+<rect x="285.48" y="13.8772093542527" width="20.52" height="178.1227906457473" rx="2" class="bar-orders"/>
+<rect x="308" y="44.624867575265185" width="20.52" height="147.37513242473483" rx="2" class="bar-buyouts"/>
+<text x="307" y="212" class="axis" text-anchor="middle">28.09</text></g><g><title>Неделя с 05.10.2026: заказы 794 792 ₽ (644 шт), выкупы 608 202 ₽</title>
+<rect x="339.48" y="18.391554912123375" width="20.52" height="173.60844508787662" rx="2" class="bar-orders"/>
+<rect x="362" y="59.14888484114492" width="20.52" height="132.85111515885507" rx="2" class="bar-buyouts"/>
+<text x="361" y="212" class="axis" text-anchor="middle">05.10</text></g><g><title>Неделя с 12.10.2026: заказы 814 511 ₽ (650 шт), выкупы 592 125 ₽</title>
+<rect x="393.48" y="14.084283413809544" width="20.52" height="177.91571658619046" rx="2" class="bar-orders"/>
+<rect x="416" y="62.660624984072626" width="20.52" height="129.33937501592737" rx="2" class="bar-buyouts"/>
+<text x="415" y="212" class="axis" text-anchor="middle">12.10</text></g><g><title>Неделя с 19.10.2026: заказы 792 230 ₽ (644 шт), выкупы 612 359 ₽</title>
+<rect x="447.48" y="18.951179111052323" width="20.52" height="173.0488208889477" rx="2" class="bar-orders"/>
+<rect x="470" y="58.24086072133709" width="20.52" height="133.7591392786629" rx="2" class="bar-buyouts"/>
+<text x="469" y="212" class="axis" text-anchor="middle">19.10</text></g><g><title>Неделя с 26.10.2026: заказы 815 237 ₽ (663 шт), выкупы 630 583 ₽</title>
+<rect x="501.48" y="13.925701380857793" width="20.52" height="178.0742986191422" rx="2" class="bar-orders"/>
+<rect x="524" y="54.260145888674636" width="20.52" height="137.73985411132537" rx="2" class="bar-buyouts"/>
+<text x="523" y="212" class="axis" text-anchor="middle">26.10</text></g><g><title>Неделя с 02.11.2026: заказы 791 814 ₽ (645 шт), выкупы 620 101 ₽</title>
+<rect x="555.48" y="19.042047052798786" width="20.52" height="172.95795294720122" rx="2" class="bar-orders"/>
+<rect x="578" y="56.54975590162284" width="20.52" height="135.45024409837717" rx="2" class="bar-buyouts"/>
+<text x="577" y="212" class="axis" text-anchor="middle">02.11</text></g><g><title>Неделя с 09.11.2026: заказы 658 461 ₽ (609 шт), выкупы 614 411 ₽</title>
+<rect x="609.48" y="48.1706831963478" width="20.52" height="143.8293168036522" rx="2" class="bar-orders"/>
+<rect x="632" y="57.79263712406848" width="20.52" height="134.20736287593152" rx="2" class="bar-buyouts"/>
+<text x="631" y="212" class="axis" text-anchor="middle">09.11</text></g><g><title>Неделя с 16.11.2026: заказы 195 374 ₽ (179 шт), выкупы 143 167 ₽ — неделя ещё идёт</title>
+<rect x="663.48" y="149.32395853179347" width="20.52" height="42.676041468206535" rx="2" class="bar-orders partial"/>
+<rect x="686" y="160.7276667884226" width="20.52" height="31.272333211577404" rx="2" class="bar-buyouts partial"/>
+<text x="685" y="212" class="axis" text-anchor="middle">16.11</text></g></svg>
+<div class="legend"><span><i class="sw orders"></i>Заказы, ₽</span><span><i class="sw buyouts"></i>Выкупы, ₽</span><span class="muted">последняя неделя неполная</span></div></section>
+<section><h2>ABC-анализ</h2>
+<div class="abc-grid">
+<div class="abc-card A"><b>A</b><span>9 товаров</span><span>82,1% выручки</span><small>основа магазина: остаток и реклама в первую очередь</small></div>
+<div class="abc-card B"><b>B</b><span>6 товаров</span><span>13% выручки</span><small>середина: кандидаты на рост</small></div>
+<div class="abc-card C"><b>C</b><span>7 товаров</span><span>4,9% выручки</span><small>хвост: проверить, стоит ли держать</small></div>
+</div><p class="note">По выручке выкупов за период за вычетом возвратов. Выручка 2 537 802 ₽.</p></section>
+<section><h2>Товары</h2><div class="table-wrap"><table class="products-table">
+<thead><tr><th>Товар</th><th>ABC</th><th>Заказы</th><th>к прошлому</th><th>Выкуп</th><th>Остаток</th><th>Дней запаса</th><th>В корзину</th><th>Рейтинг</th><th>Негатив</th></tr></thead>
+<tbody><tr>
+<td><b>PLAID-GREY-150</b><div class="muted small">Плед флисовый 150×200 серый · 201450001</div></td>
+<td class="c"><span class="abc A">A</span></td>
+<td class="r">722 254 ₽<div class="muted small">484 шт</div></td>
+<td class="r">+16%</td>
+<td class="r">83%</td>
+<td class="r">120</td>
+<td class="r bad">7</td>
+<td class="r">8%</td>
+<td class="r">4,7</td>
+<td class="r bad">6/42</td>
+</tr><tr>
+<td><b>PLAID-BEIGE-200</b><div class="muted small">Плед вязаный 200×220 бежевый · 201450002</div></td>
+<td class="c"><span class="abc A">A</span></td>
+<td class="r">440 213 ₽<div class="muted small">152 шт</div></td>
+<td class="r">-29%</td>
+<td class="r">111%</td>
+<td class="r bad">0</td>
+<td class="r bad">0</td>
+<td class="r">9%</td>
+<td class="r">4,8</td>
+<td class="r">0/24</td>
+</tr><tr>
+<td><b>PILLOW-50x70</b><div class="muted small">Подушка 50×70 бамбук · 201450003</div></td>
+<td class="c"><span class="abc A">A</span></td>
+<td class="r">342 358 ₽<div class="muted small">346 шт</div></td>
+<td class="r">+5%</td>
+<td class="r">93%</td>
+<td class="r">60</td>
+<td class="r bad">5</td>
+<td class="r">10%</td>
+<td class="r">4,9</td>
+<td class="r">0/38</td>
+</tr><tr>
+<td><b>TOWEL-SET-3</b><div class="muted small">Набор полотенец 3 шт хлопок · 201450004</div></td>
+<td class="c"><span class="abc A">A</span></td>
+<td class="r">276 803 ₽<div class="muted small">215 шт</div></td>
+<td class="r">-21%</td>
+<td class="r">79%</td>
+<td class="r">1 401</td>
+<td class="r bad">195</td>
+<td class="r">11%</td>
+<td class="r">4,6</td>
+<td class="r">2/20</td>
+</tr><tr>
+<td><b>BATHROBE-M</b><div class="muted small">Халат махровый женский · 201450010</div></td>
+<td class="c"><span class="abc A">A</span></td>
+<td class="r">208 153 ₽<div class="muted small">84 шт</div></td>
+<td class="r">-9%</td>
+<td class="r bad">48%</td>
+<td class="r">141</td>
+<td class="r">50</td>
+<td class="r">7%</td>
+<td class="r">4,8</td>
+<td class="r">0/7</td>
+</tr><tr>
+<td><b>BLANKET-KIDS</b><div class="muted small">Одеяло детское 110×140 · 201450008</div></td>
+<td class="c"><span class="abc A">A</span></td>
+<td class="r">171 868 ₽<div class="muted small">91 шт</div></td>
+<td class="r bad">-39%</td>
+<td class="r">92%</td>
+<td class="r">231</td>
+<td class="r">76</td>
+<td class="r">10%</td>
+<td class="r">4,6</td>
+<td class="r bad">3/15</td>
+</tr><tr>
+<td><b>CANDLE-SOY-200</b><div class="muted small">Свеча соевая в банке 200 г · 201450007</div></td>
+<td class="c"><span class="abc A">A</span></td>
+<td class="r">169 062 ₽<div class="muted small">244 шт</div></td>
+<td class="r">+35%</td>
+<td class="r">83%</td>
+<td class="r">25</td>
+<td class="r bad">3</td>
+<td class="r">9%</td>
+<td class="r">4,9</td>
+<td class="r">0/17</td>
+</tr><tr>
+<td><b>SLIPPERS-38-39</b><div class="muted small">Тапочки домашние меховые · 201450006</div></td>
+<td class="c"><span class="abc B">B</span></td>
+<td class="r">166 566 ₽<div class="muted small">211 шт</div></td>
+<td class="r">-2%</td>
+<td class="r bad">37%</td>
+<td class="r">321</td>
+<td class="r">46</td>
+<td class="r">8%</td>
+<td class="r">4,1</td>
+<td class="r">2/9</td>
+</tr><tr>
+<td><b>MUG-CERAMIC-400</b><div class="muted small">Кружка керамическая 400 мл · 201450005</div></td>
+<td class="c"><span class="abc A">A</span></td>
+<td class="r">138 957 ₽<div class="muted small">236 шт</div></td>
+<td class="r">-2%</td>
+<td class="r">77%</td>
+<td class="r">366</td>
+<td class="r">47</td>
+<td class="r">3%</td>
+<td class="r">4,7</td>
+<td class="r">2/25</td>
+</tr><tr>
+<td><b>CURTAIN-BLACK</b><div class="muted small">Штора блэкаут 150×270 · 201450014</div></td>
+<td class="c"><span class="abc A">A</span></td>
+<td class="r">103 086 ₽<div class="muted small">61 шт</div></td>
+<td class="r">-6%</td>
+<td class="r">86%</td>
+<td class="r">95</td>
+<td class="r">47</td>
+<td class="r">4%</td>
+<td class="r">4,8</td>
+<td class="r">0/4</td>
+</tr><tr>
+<td><b>VASE-GLASS-25</b><div class="muted small">Ваза стеклянная 25 см · 201450012</div></td>
+<td class="c"><span class="abc B">B</span></td>
+<td class="r">94 006 ₽<div class="muted small">79 шт</div></td>
+<td class="r">+2%</td>
+<td class="r">84%</td>
+<td class="r">117</td>
+<td class="r">44</td>
+<td class="r">9%</td>
+<td class="r">4,6</td>
+<td class="r">1/6</td>
+</tr><tr>
+<td><b>NAPKIN-LINEN-4</b><div class="muted small">Салфетки льняные 4 шт · 201450011</div></td>
+<td class="c"><span class="abc B">B</span></td>
+<td class="r">80 737 ₽<div class="muted small">91 шт</div></td>
+<td class="r">+2%</td>
+<td class="r">67%</td>
+<td class="r">141</td>
+<td class="r">47</td>
+<td class="r">8%</td>
+<td class="r">4,9</td>
+<td class="r">0/5</td>
+</tr><tr>
+<td><b>DIFFUSER-100</b><div class="muted small">Диффузор ароматический 100 мл · 201450013</div></td>
+<td class="c"><span class="abc B">B</span></td>
+<td class="r">66 091 ₽<div class="muted small">67 шт</div></td>
+<td class="r">-5%</td>
+<td class="r">91%</td>
+<td class="r">4</td>
+<td class="r bad">2</td>
+<td class="r">10%</td>
+<td class="r">4,7</td>
+<td class="r">0/4</td>
+</tr><tr>
+<td><b>ORGANIZER-6</b><div class="muted small">Органайзер для белья 6 ячеек · 201450009</div></td>
+<td class="c"><span class="abc B">B</span></td>
+<td class="r">65 346 ₽<div class="muted small">145 шт</div></td>
+<td class="r">-4%</td>
+<td class="r">87%</td>
+<td class="r">231</td>
+<td class="r">48</td>
+<td class="r">11%</td>
+<td class="r">3,9</td>
+<td class="r bad">4/19</td>
+</tr><tr>
+<td><b>THERMOS-1L</b><div class="muted small">Термос 1 л стальной · 201450017</div></td>
+<td class="c"><span class="abc C">C</span></td>
+<td class="r">53 113 ₽<div class="muted small">38 шт</div></td>
+<td class="r">-2%</td>
+<td class="r">69%</td>
+<td class="r">59</td>
+<td class="r">46</td>
+<td class="r">9%</td>
+<td class="r">4,4</td>
+<td class="r">1/6</td>
+</tr><tr>
+<td><b>BOX-STORAGE-3</b><div class="muted small">Короба для хранения 3 шт · 201450016</div></td>
+<td class="c"><span class="abc B">B</span></td>
+<td class="r">45 813 ₽<div class="muted small">42 шт</div></td>
+<td class="r">-2%</td>
+<td class="r">92%</td>
+<td class="r">600</td>
+<td class="r bad">429</td>
+<td class="r">8%</td>
+<td class="r">4,6</td>
+<td class="r">1/5</td>
+</tr><tr>
+<td><b>RUG-BATH-50</b><div class="muted small">Коврик для ванной 50×80 · 201450015</div></td>
+<td class="c"><span class="abc C">C</span></td>
+<td class="r">37 864 ₽<div class="muted small">55 шт</div></td>
+<td class="r">+4%</td>
+<td class="r">96%</td>
+<td class="r">86</td>
+<td class="r">47</td>
+<td class="r">7%</td>
+<td class="r">4,9</td>
+<td class="r">1/7</td>
+</tr><tr>
+<td><b>TABLECLOTH-140</b><div class="muted small">Скатерть 140×180 водоотталкивающая · 201450020</div></td>
+<td class="c"><span class="abc C">C</span></td>
+<td class="r">29 376 ₽<div class="muted small">23 шт</div></td>
+<td class="r">-2%</td>
+<td class="r">100%</td>
+<td class="r">32</td>
+<td class="r">42</td>
+<td class="r">7%</td>
+<td class="r">4,6</td>
+<td class="r">0/5</td>
+</tr><tr>
+<td><b>APRON-COTTON</b><div class="muted small">Фартук кухонный хлопок · 201450018</div></td>
+<td class="c"><span class="abc C">C</span></td>
+<td class="r">15 068 ₽<div class="muted small">31 шт</div></td>
+<td class="r">-6%</td>
+<td class="r">74%</td>
+<td class="r">50</td>
+<td class="r">49</td>
+<td class="r">10%</td>
+<td class="r">4,8</td>
+<td class="r">0/1</td>
+</tr><tr>
+<td><b>BASKET-JUTE</b><div class="muted small">Корзина джутовая 30 см · 201450024</div></td>
+<td class="c"><span class="abc C">C</span></td>
+<td class="r">10 926 ₽<div class="muted small">11 шт</div></td>
+<td class="r">+173%</td>
+<td class="r">82%</td>
+<td class="r">19</td>
+<td class="r">51</td>
+<td class="r">11%</td>
+<td class="r">4,6</td>
+<td class="r">0/1</td>
+</tr><tr>
+<td><b>PILLOWCASE-2</b><div class="muted small">Наволочки 50×70 2 шт сатин · 201450021</div></td>
+<td class="c"><span class="abc C">C</span></td>
+<td class="r">9 639 ₽<div class="muted small">14 шт</div></td>
+<td class="r">+28%</td>
+<td class="r">93%</td>
+<td class="r">23</td>
+<td class="r">49</td>
+<td class="r">8%</td>
+<td class="r">4,7</td>
+<td class="r">0/1</td>
+</tr><tr>
+<td><b>HOOKS-SET-10</b><div class="muted small">Крючки самоклеящиеся 10 шт · 201450019</div></td>
+<td class="c"><span class="abc C">C</span></td>
+<td class="r">5 817 ₽<div class="muted small">20 шт</div></td>
+<td class="r">-13%</td>
+<td class="r">84%</td>
+<td class="r">41</td>
+<td class="r">61</td>
+<td class="r">11%</td>
+<td class="r">4,9</td>
+<td class="r">0/2</td>
+</tr><tr>
+<td><b>FRAME-PHOTO-A4</b><div class="muted small">Рамка для фото А4 · 201450023</div></td>
+<td class="c"><span class="abc —">—</span></td>
+<td class="r">0 ₽<div class="muted small">0 шт</div></td>
+<td class="r">—</td>
+<td class="r">—</td>
+<td class="r">141</td>
+<td class="r">—</td>
+<td class="r">0%</td>
+<td class="r">4,9</td>
+<td class="r">—</td>
+</tr><tr>
+<td><b>LAMP-NIGHT</b><div class="muted small">Ночник светодиодный · 201450022</div></td>
+<td class="c"><span class="abc —">—</span></td>
+<td class="r">0 ₽<div class="muted small">0 шт</div></td>
+<td class="r">—</td>
+<td class="r">—</td>
+<td class="r">85</td>
+<td class="r">—</td>
+<td class="r">0%</td>
+<td class="r">4,8</td>
+<td class="r">—</td>
+</tr></tbody></table></div><p class="note">Дней запаса = остаток на складах WB ÷ средние заказы в день за период. Красным — то, что выходит за ориентиры.</p></section>
+<section><h2>Деньги</h2><div class="money"><div class="money-row pos"><span class="money-label">Продажи (по цене со скидкой)</span><span class="money-bar"><i style="width:100.0%"></i></span><span class="money-val">2 620 621 ₽</span></div><div class="money-row neg"><span class="money-label">Возвраты</span><span class="money-bar"><i style="width:3.2%"></i></span><span class="money-val">-82 819 ₽</span></div><div class="money-row neg"><span class="money-label">Удержал WB с продаж (комиссия, эквайринг)</span><span class="money-bar"><i style="width:25.2%"></i></span><span class="money-val">-659 807 ₽</span></div><div class="money-row neg"><span class="money-label">Логистика</span><span class="money-bar"><i style="width:9.6%"></i></span><span class="money-val">-252 126 ₽</span></div><div class="money-row neg"><span class="money-label">Хранение</span><span class="money-bar"><i style="width:4.5%"></i></span><span class="money-val">-118 314 ₽</span></div><div class="money-row neg"><span class="money-label">Платная приёмка</span><span class="money-bar"><i style="width:1.0%"></i></span><span class="money-val">-2 400 ₽</span></div><div class="money-row neg"><span class="money-label">Штрафы</span><span class="money-bar"><i style="width:1.0%"></i></span><span class="money-val">-1 500 ₽</span></div><div class="money-row total"><span class="money-label">На руки (оценка)</span><span class="money-bar"><i style="width:57.4%"></i></span><span class="money-val">1 503 655 ₽</span></div></div><p class="note">По отчёту о реализации WB за период. Отчёты формируются раз в неделю — последние дни могут ещё не попасть. Себестоимость, налоги и реклама не учтены.</p></section>
+<section><h2>Отзывы</h2>
+<p>Без ответа: <b>26</b> отзывов и <b>4</b> вопросов. За период отзывов: 263, из них негативных (3★ и ниже): 23.</p>
+<div class="reviews"><blockquote><div class="stars">★☆☆☆☆ <b>PLAID-GREY-150</b> <span class="muted">Плед флисовый 150×200 серый</span></div>Долгая доставка.</blockquote><blockquote><div class="stars">★★★☆☆ <b>ORGANIZER-6</b> <span class="muted">Органайзер для белья 6 ячеек</span></div>Швы расходятся через неделю, качество слабое.</blockquote><blockquote><div class="stars">★☆☆☆☆ <b>VASE-GLASS-25</b> <span class="muted">Ваза стеклянная 25 см</span></div>Упаковка помята, но товар целый.</blockquote><blockquote><div class="stars">★★☆☆☆ <b>BLANKET-KIDS</b> <span class="muted">Одеяло детское 110×140</span></div>Упаковка помята, но товар целый.</blockquote><blockquote><div class="stars">★★☆☆☆ <b>SLIPPERS-38-39</b> <span class="muted">Тапочки домашние меховые</span></div>Маломерят на размер, пришлось вернуть.</blockquote><blockquote><div class="stars">★★★☆☆ <b>PLAID-GREY-150</b> <span class="muted">Плед флисовый 150×200 серый</span></div>Цвет не совпадает с фото.</blockquote><blockquote><div class="stars">★★☆☆☆ <b>ORGANIZER-6</b> <span class="muted">Органайзер для белья 6 ячеек</span></div>Швы расходятся через неделю, качество слабое.</blockquote><blockquote><div class="stars">★☆☆☆☆ <b>BOX-STORAGE-3</b> <span class="muted">Короба для хранения 3 шт</span></div>Упаковка помята, но товар целый.</blockquote><blockquote><div class="stars">★☆☆☆☆ <b>PLAID-GREY-150</b> <span class="muted">Плед флисовый 150×200 серый</span></div>Долгая доставка.</blockquote><blockquote><div class="stars">★☆☆☆☆ <b>THERMOS-1L</b> <span class="muted">Термос 1 л стальной</span></div>Цвет не совпадает с фото.</blockquote><blockquote><div class="stars">★★★☆☆ <b>PLAID-GREY-150</b> <span class="muted">Плед флисовый 150×200 серый</span></div>Упаковка помята, но товар целый.</blockquote><blockquote><div class="stars">★★★☆☆ <b>MUG-CERAMIC-400</b> <span class="muted">Кружка керамическая 400 мл</span></div>Упаковка помята, но товар целый.</blockquote></div>
+</section>
+<section><h2>Реклама</h2><div class="table-wrap"><table><thead><tr><th>Кампания</th><th>ID</th><th class="r">Потрачено</th></tr></thead><tbody><tr><td>Тапочки — каталог</td><td>31003</td><td class="r">286 721 ₽</td></tr><tr><td>Пледы — поиск</td><td>31001</td><td class="r">176 423 ₽</td></tr><tr><td>Кружки — поиск</td><td>31002</td><td class="r">120 276 ₽</td></tr></tbody><tfoot><tr><td colspan="2">Итого</td><td class="r">583 420 ₽</td></tr></tfoot></table></div></section>
+<footer>Демо-отчёт на выдуманных данных. Данные — API Wildberries по ключу продавца. Отчёт сделан в wb-kit.</footer>
+</div></body></html>

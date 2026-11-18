@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__wb",
+      "Bash(npm run check)",
+      "Bash(npm run check:*)",
+      "Bash(npm run set-key:*)",
+      "Bash(npm run audit)",
+      "Bash(npm run audit:*)",
+      "Write(./reports/**)",
+      "Edit(./reports/**)",
+      "Bash(npm install)",
+      "Bash(npm test)"
+    ],
+    "ask": [
+      "mcp__wb__update_prices",
+      "mcp__wb__update_fbs_stocks",
+      "mcp__wb__create_fbs_supply",
+      "mcp__wb__add_orders_to_fbs_supply",
+      "mcp__wb__deliver_fbs_supply",
+      "mcp__wb__reply_feedback",
+      "mcp__wb__reply_question"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ]
+  }
+}

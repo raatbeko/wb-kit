@@ -1,0 +1,15 @@
+# Ключи и данные магазина — никогда в git
+.env
+.env.*
+!.env.example
+reports/
+data/
+
+# Скачивается при установке (своя лицензия у автора)
+.claude/skills/wildberries-api/
+
+# Служебное
+node_modules/
+.claude/settings.local.json
+*.log
+.DS_Store

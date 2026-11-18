@@ -1,0 +1,30 @@
+{
+  "name": "wb-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Набор для продавца Wildberries в Claude Code: аудит кабинета, конкуренты, карточки, агенты и Telegram-бот",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "audit": "tsx scripts/audit.ts",
+    "check": "tsx scripts/check.ts",
+    "set-key": "tsx scripts/set-key.ts",
+    "mcp": "tsx mcp/wb/src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "exceljs": "4.4.0",
+    "tsx": "4.23.15",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.3",
+    "typescript": "5.8.3",
+    "vitest": "3.1.1"
+  }
+}

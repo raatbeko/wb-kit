@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "wb": {
+      "command": "node",
+      "args": ["--import", "tsx", "mcp/wb/src/index.ts"]
+    }
+  }
+}
