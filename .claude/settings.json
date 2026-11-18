@@ -7,6 +7,7 @@
       "Bash(npm run set-key:*)",
       "Bash(npm run audit)",
       "Bash(npm run audit:*)",
+      "Bash(npm run competitors:*)",
       "Write(./reports/**)",
       "Edit(./reports/**)",
       "Bash(npm install)",

@@ -14,7 +14,8 @@
     "set-key": "tsx scripts/set-key.ts",
     "mcp": "tsx mcp/wb/src/index.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "competitors": "tsx scripts/competitors.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",

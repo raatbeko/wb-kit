@@ -6,15 +6,55 @@ import type { AuditReport, Issue, Kpi, ProductLine } from "./analyze.js";
 import { THRESHOLDS } from "./analyze.js";
 import type { WeekPoint } from "./collect.js";
 
-const esc = (s: unknown) =>
+export const esc = (s: unknown) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-const fmt = (n: number | null | undefined, digits = 0) =>
+export const fmt = (n: number | null | undefined, digits = 0) =>
   n === null || n === undefined || Number.isNaN(n) ? "—" : n.toLocaleString("ru-RU", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
-const rub = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${fmt(Math.round(n))} ₽`);
-const ruDate = (d: string) => {
+export const rub = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${fmt(Math.round(n))} ₽`);
+export const ruDate = (d: string) => {
   const [y, m, day] = d.split("-");
   return `${day}.${m}.${y}`;
 };
+
+/** Общие стили отчётов wb-kit: аудит и конкуренты выглядят одинаково. */
+export const BASE_CSS = `:root{--bg:#f6f5f2;--card:#fff;--text:#1d1d1f;--muted:#6b6b70;--line:#e4e2dc;--accent:#7b2cbf;--accent2:#c9a8ee;--good:#1f8a4c;--bad:#c62f3a;--warn:#b86e00;--chip-high:#fde7e9;--chip-med:#fff1d6;--chip-low:#eef0f3}
+@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1d1d21;--text:#ececef;--muted:#9a9aa3;--line:#2e2e34;--accent:#b07cf0;--accent2:#5b3a85;--good:#4cc27e;--bad:#ff6b73;--warn:#f0a63a;--chip-high:#3a1e22;--chip-med:#3a2e17;--chip-low:#26282d}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 16px 48px}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end;margin-bottom:20px}
+h1{font-size:26px;margin:0}h2{font-size:19px;margin:0 0 14px}h3{font-size:16px;margin:6px 0}
+.sub{color:var(--muted)}.badge{background:var(--accent);color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;margin-left:8px;vertical-align:middle}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin:16px 0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.kpi-label{color:var(--muted);font-size:13px}.kpi-value{font-size:22px;font-weight:650;margin:2px 0;font-variant-numeric:tabular-nums}
+.kpi-foot{font-size:12px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap}.delta.up{color:var(--good)}.delta.down{color:var(--bad)}
+.insights{border-left:4px solid var(--accent)}.insights p,.insights li{max-width:75ch}
+.issues{display:grid;gap:12px}.issue{border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.issue.high{border-left:4px solid var(--bad)}.issue.medium{border-left:4px solid var(--warn)}.issue.low{border-left:4px solid var(--line)}
+.issue-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.num{font-weight:700;color:var(--muted)}
+.chip{font-size:12px;border-radius:999px;padding:2px 9px;font-weight:600}.chip.high{background:var(--chip-high);color:var(--bad)}.chip.medium{background:var(--chip-med);color:var(--warn)}.chip.low{background:var(--chip-low);color:var(--muted)}
+.impact{font-size:12px;color:var(--bad);font-weight:600}.action{background:var(--bg);border-radius:8px;padding:8px 10px}
+.products{margin:8px 0 0;padding-left:18px}.products li{margin:2px 0}details summary{cursor:pointer;color:var(--accent);margin-top:4px}
+.muted{color:var(--muted)}.small{font-size:12px}.note{color:var(--muted);font-size:13px;margin:10px 0 0}
+.chart{width:100%;height:auto}.chart .grid{stroke:var(--line)}.chart .axis{fill:var(--muted);font-size:11px}
+.bar-orders{fill:var(--accent)}.bar-buyouts{fill:var(--accent2)}.partial{opacity:.45}
+.legend{display:flex;gap:16px;font-size:13px;color:var(--muted);flex-wrap:wrap}.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}.sw.orders{background:var(--accent)}.sw.buyouts{background:var(--accent2)}
+.abc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}.abc-card{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:2px}
+.abc-card b{font-size:22px}.abc-card small{color:var(--muted)}
+.abc{display:inline-block;min-width:22px;border-radius:6px;font-weight:700;font-size:12px;padding:1px 6px}.abc.A{background:var(--accent);color:#fff}.abc.B{background:var(--accent2)}.abc.C{background:var(--chip-low);color:var(--muted)}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap;position:sticky;top:0;background:var(--card)}
+td{border-bottom:1px solid var(--line);padding:7px 8px;vertical-align:top}td.r,th.r{text-align:right}td.c{text-align:center}td.bad{color:var(--bad);font-weight:600}tfoot td{font-weight:650}
+.products-table td:first-child{min-width:190px}
+.money{display:grid;gap:6px}.money-row{display:grid;grid-template-columns:minmax(150px,280px) 1fr minmax(110px,auto);gap:10px;align-items:center}
+.money-bar{background:var(--bg);border-radius:4px;height:12px;overflow:hidden}.money-bar i{display:block;height:100%;border-radius:4px}
+.money-row.pos i{background:var(--good)}.money-row.neg i{background:var(--bad)}.money-row.total i{background:var(--accent)}.money-row.total{font-weight:700;border-top:1px solid var(--line);padding-top:6px}.money-val{text-align:right;font-variant-numeric:tabular-nums}
+.reviews{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}blockquote{margin:0;border:1px solid var(--line);border-radius:10px;padding:10px 12px}.stars{color:var(--warn);font-size:13px;margin-bottom:4px}
+code{background:var(--bg);border-radius:4px;padding:1px 5px}footer{color:var(--muted);font-size:13px;text-align:center;margin-top:24px}
+@media (max-width:600px){.money-row{grid-template-columns:1fr auto}.money-bar{grid-column:1/-1;order:3}h1{font-size:22px}.kpis{grid-template-columns:1fr 1fr}.kpi-value{font-size:18px}section{padding:16px}}
+@media print{body{background:#fff}section{break-inside:avoid}}
+`;
 
 /** Мини-markdown для выводов Claude: заголовки, списки, жирный, абзацы. Сначала экранируем. */
 export function markdownToHtml(md: string): string {
@@ -204,43 +244,7 @@ ${negatives.length ? `<div class="reviews">${negatives.map((f) => `<blockquote><
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Аудит WB — ${esc(shop)} — ${periodText}</title>
 <style>
-:root{--bg:#f6f5f2;--card:#fff;--text:#1d1d1f;--muted:#6b6b70;--line:#e4e2dc;--accent:#7b2cbf;--accent2:#c9a8ee;--good:#1f8a4c;--bad:#c62f3a;--warn:#b86e00;--chip-high:#fde7e9;--chip-med:#fff1d6;--chip-low:#eef0f3}
-@media (prefers-color-scheme:dark){:root{--bg:#141416;--card:#1d1d21;--text:#ececef;--muted:#9a9aa3;--line:#2e2e34;--accent:#b07cf0;--accent2:#5b3a85;--good:#4cc27e;--bad:#ff6b73;--warn:#f0a63a;--chip-high:#3a1e22;--chip-med:#3a2e17;--chip-low:#26282d}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
-.wrap{max-width:1080px;margin:0 auto;padding:28px 16px 48px}
-header{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end;margin-bottom:20px}
-h1{font-size:26px;margin:0}h2{font-size:19px;margin:0 0 14px}h3{font-size:16px;margin:6px 0}
-.sub{color:var(--muted)}.badge{background:var(--accent);color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600;margin-left:8px;vertical-align:middle}
-section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin:16px 0}
-.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
-.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
-.kpi-label{color:var(--muted);font-size:13px}.kpi-value{font-size:22px;font-weight:650;margin:2px 0;font-variant-numeric:tabular-nums}
-.kpi-foot{font-size:12px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap}.delta.up{color:var(--good)}.delta.down{color:var(--bad)}
-.insights{border-left:4px solid var(--accent)}.insights p,.insights li{max-width:75ch}
-.issues{display:grid;gap:12px}.issue{border:1px solid var(--line);border-radius:12px;padding:14px 16px}
-.issue.high{border-left:4px solid var(--bad)}.issue.medium{border-left:4px solid var(--warn)}.issue.low{border-left:4px solid var(--line)}
-.issue-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.num{font-weight:700;color:var(--muted)}
-.chip{font-size:12px;border-radius:999px;padding:2px 9px;font-weight:600}.chip.high{background:var(--chip-high);color:var(--bad)}.chip.medium{background:var(--chip-med);color:var(--warn)}.chip.low{background:var(--chip-low);color:var(--muted)}
-.impact{font-size:12px;color:var(--bad);font-weight:600}.action{background:var(--bg);border-radius:8px;padding:8px 10px}
-.products{margin:8px 0 0;padding-left:18px}.products li{margin:2px 0}details summary{cursor:pointer;color:var(--accent);margin-top:4px}
-.muted{color:var(--muted)}.small{font-size:12px}.note{color:var(--muted);font-size:13px;margin:10px 0 0}
-.chart{width:100%;height:auto}.chart .grid{stroke:var(--line)}.chart .axis{fill:var(--muted);font-size:11px}
-.bar-orders{fill:var(--accent)}.bar-buyouts{fill:var(--accent2)}.partial{opacity:.45}
-.legend{display:flex;gap:16px;font-size:13px;color:var(--muted);flex-wrap:wrap}.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}.sw.orders{background:var(--accent)}.sw.buyouts{background:var(--accent2)}
-.abc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}.abc-card{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:2px}
-.abc-card b{font-size:22px}.abc-card small{color:var(--muted)}
-.abc{display:inline-block;min-width:22px;border-radius:6px;font-weight:700;font-size:12px;padding:1px 6px}.abc.A{background:var(--accent);color:#fff}.abc.B{background:var(--accent2)}.abc.C{background:var(--chip-low);color:var(--muted)}
-.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
-th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap;position:sticky;top:0;background:var(--card)}
-td{border-bottom:1px solid var(--line);padding:7px 8px;vertical-align:top}td.r,th.r{text-align:right}td.c{text-align:center}td.bad{color:var(--bad);font-weight:600}tfoot td{font-weight:650}
-.products-table td:first-child{min-width:190px}
-.money{display:grid;gap:6px}.money-row{display:grid;grid-template-columns:minmax(150px,280px) 1fr minmax(110px,auto);gap:10px;align-items:center}
-.money-bar{background:var(--bg);border-radius:4px;height:12px;overflow:hidden}.money-bar i{display:block;height:100%;border-radius:4px}
-.money-row.pos i{background:var(--good)}.money-row.neg i{background:var(--bad)}.money-row.total i{background:var(--accent)}.money-row.total{font-weight:700;border-top:1px solid var(--line);padding-top:6px}.money-val{text-align:right;font-variant-numeric:tabular-nums}
-.reviews{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px}blockquote{margin:0;border:1px solid var(--line);border-radius:10px;padding:10px 12px}.stars{color:var(--warn);font-size:13px;margin-bottom:4px}
-code{background:var(--bg);border-radius:4px;padding:1px 5px}footer{color:var(--muted);font-size:13px;text-align:center;margin-top:24px}
-@media (max-width:600px){.money-row{grid-template-columns:1fr auto}.money-bar{grid-column:1/-1;order:3}h1{font-size:22px}.kpis{grid-template-columns:1fr 1fr}.kpi-value{font-size:18px}section{padding:16px}}
-@media print{body{background:#fff}section{break-inside:avoid}}
+${BASE_CSS}
 </style></head>
 <body><div class="wrap">
 <header><div><h1>Аудит кабинета WB${d.demo ? '<span class="badge">ДЕМО</span>' : ""}</h1><div class="sub">${esc(shop)} · ${periodText} (${d.period.days} дн.) · сравнение с ${ruDate(d.previous.from)} — ${ruDate(d.previous.to)}</div></div>

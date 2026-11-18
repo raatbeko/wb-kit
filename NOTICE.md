@@ -15,3 +15,7 @@ Copyright (c) 2026 theYahia. Текст лицензии: [`mcp/wb/LICENSE-theYa
 ## Документация Wildberries Seller API
 
 Маршруты сверены с официальной документацией WB (dev.wildberries.ru/openapi) по снимку из репозитория miilv/wb-seller-api-skill. Сам Swagger в wb-kit не включён: у того репозитория не указана лицензия.
+
+## mpstats-io/claude-code-skills — MIT
+
+https://github.com/mpstats-io/claude-code-skills. Из скрипта `wb-card-content.sh` взята таблица серверов CDN WB по диапазонам артикулов (`competitors/cdn.ts`, `BASKET_RANGES`). Для новых артикулов wb-kit дополняет её своими опорными точками.
