@@ -6,8 +6,10 @@
  * работать. Ключи на экран не выводит. Нужен клиенту, который остаётся без
  * сопровождения: любая проблема описана словами и с тем, как её исправить.
  */
-import { copyFileSync, existsSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { createServer } from "node:net";
 import { join } from "node:path";
 import { decodeToken, pingAll, type PingResult } from "../mcp/wb/src/diagnostics.js";
 import { ENV_PATH, ROOT, loadEnv, readKey } from "../mcp/wb/src/env.js";
@@ -55,6 +57,106 @@ async function checkMpstats(token: string): Promise<Check> {
   } catch {
     return { name: "MPSTATS", status: "warn", detail: "нет связи с mpstats.io" };
   }
+}
+
+// ---------- 3D-офис (npm run office:web) ----------
+// Офис — дополнение к набору, поэтому его проблемы — предупреждения, а не ошибки:
+// аудит, /card и остальное работают и без него.
+
+const OFFICE_PORT = 3000;
+
+/** События Claude Code, без которых офис не узнает, кто работает и кто ждёт «да». */
+export const OFFICE_HOOK_EVENTS = ["SessionStart", "UserPromptSubmit", "SubagentStart", "SubagentStop", "PreToolUse", "PermissionRequest", "Stop"];
+
+type HookSettings = { hooks?: Record<string, { hooks?: { command?: string }[] }[]>; disableAllHooks?: boolean };
+
+/** Какие нужные офису события не подключены (хук должен вызывать office/hooks/event.ts). */
+export function missingOfficeHooks(settings: HookSettings): string[] {
+  return OFFICE_HOOK_EVENTS.filter(
+    (ev) => !(settings.hooks?.[ev] ?? []).some((m) => (m.hooks ?? []).some((h) => /office[\\/]hooks[\\/]event\.ts/.test(h.command ?? ""))),
+  );
+}
+
+export function checkOfficeHooks(root = ROOT): Check {
+  const name = "Офис: связь с Claude Code";
+  const restore = "Верните файл .claude/settings.json из архива набора (или `git checkout .claude/settings.json`) и перезапустите Claude Code.";
+  let settings: HookSettings;
+  try {
+    settings = JSON.parse(readFileSync(join(root, ".claude", "settings.json"), "utf8")) as HookSettings;
+  } catch {
+    return { name, status: "warn", detail: "не читается .claude/settings.json — офис не увидит работу сотрудников", fix: restore };
+  }
+  const missing = missingOfficeHooks(settings);
+  if (missing.length) return { name, status: "warn", detail: `не подключены события: ${missing.join(", ")} — офис не увидит часть работы`, fix: restore };
+  // Личные настройки могут выключить все хуки разом.
+  try {
+    const local = JSON.parse(readFileSync(join(root, ".claude", "settings.local.json"), "utf8")) as HookSettings;
+    if (local.disableAllHooks) {
+      return { name, status: "warn", detail: "хуки выключены в .claude/settings.local.json (disableAllHooks)", fix: "Уберите строку \"disableAllHooks\": true из .claude/settings.local.json и перезапустите Claude Code." };
+    }
+  } catch {
+    // Файла нет — это нормально.
+  }
+  return { name, status: "ok", detail: "хуки подключены (сработают, когда Claude Code доверяет папке набора)" };
+}
+
+export function checkSqlite(): Check {
+  const name = "Офис: база данных (better-sqlite3)";
+  try {
+    const Database = createRequire(import.meta.url)("better-sqlite3") as new (path: string) => { close(): void };
+    new Database(":memory:").close();
+    return { name, status: "ok", detail: "модуль загружается" };
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    return {
+      name,
+      status: "warn",
+      detail: code === "MODULE_NOT_FOUND" ? "модуль не установлен — 3D-офис не запустится" : "модуль не загружается (собран под другую версию Node) — 3D-офис не запустится",
+      fix:
+        code === "MODULE_NOT_FOUND"
+          ? "Выполните npm install в папке набора."
+          : "Выполните npm install ещё раз. Не помогло — переустановите Node.js 22 LTS с nodejs.org, перезапустите терминал и снова npm install.",
+    };
+  }
+}
+
+export function checkDataDir(root = ROOT): Check {
+  const name = "Офис: папка data/";
+  const dir = join(root, "data");
+  const probe = join(dir, `.check-${process.pid}.tmp`);
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(probe, "ok");
+    rmSync(probe, { force: true });
+    return { name, status: "ok", detail: "доступна на запись" };
+  } catch {
+    return {
+      name,
+      status: "warn",
+      detail: `нельзя записать в ${dir} — офису негде хранить базу`,
+      fix: "Положите набор в свою папку (например, «Документы\\wb-kit»), а не в Program Files, OneDrive «только онлайн» или на флешку только для чтения.",
+    };
+  }
+}
+
+/** Порт свободен или на нём уже работает наш офис. */
+export async function checkOfficePort(port = OFFICE_PORT): Promise<Check> {
+  const name = `Офис: порт ${port}`;
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: AbortSignal.timeout(2_000) });
+    const j = (await res.json()) as { ok?: boolean };
+    if (res.ok && j.ok) return { name, status: "ok", detail: `офис уже запущен — откройте http://localhost:${port}` };
+  } catch {
+    // Никто не ответил или ответил не офис — проверяем, свободен ли порт.
+  }
+  const free = await new Promise<boolean>((resolve) => {
+    const srv = createServer();
+    srv.once("error", () => resolve(false));
+    srv.listen(port, "127.0.0.1", () => srv.close(() => resolve(true)));
+  });
+  return free
+    ? { name, status: "ok", detail: "свободен — офис можно запустить: npm run office:web" }
+    : { name, status: "warn", detail: "занят другой программой", fix: `Запустите офис на другом порту: npm run office:web -- --port 3100 и откройте http://localhost:3100` };
 }
 
 async function main() {
@@ -151,6 +253,9 @@ async function main() {
     status: readKey("ANTHROPIC_API_KEY") && readKey("TELEGRAM_BOT_TOKEN") ? "ok" : "warn",
     detail: readKey("ANTHROPIC_API_KEY") && readKey("TELEGRAM_BOT_TOKEN") ? "ключи вписаны" : "не настроен (нужен только для бота 24/7)",
   });
+
+  // 5. 3D-офис
+  checks.push(checkSqlite(), checkDataDir(), await checkOfficePort(), checkOfficeHooks());
 
   const features = featureMap(pings);
   const failed = checks.some((c) => c.status === "fail");

@@ -91,6 +91,8 @@ export function startDemo(store: OfficeStore, getSnapshot: () => Snapshot | unde
   let i = 0;
   let step = 0;
   const tick = () => {
+    // Сценарий пересобирается в начале каждой сцены: снимок демо-магазина мог появиться только что.
+    if (step === 0) beats = buildScenario(getSnapshot());
     const b = beats[i]!;
     if (step === 0) {
       store.setAgentStatus(b.agent, "working", b.steps[0]);
@@ -110,7 +112,6 @@ export function startDemo(store: OfficeStore, getSnapshot: () => Snapshot | unde
     store.addEvent({ kind: "agent_finished", agentId: b.agent, message: `Готово: ${b.done}`, data: { demo: true } });
     step = 0;
     i = (i + 1) % beats.length;
-    if (i === 0) beats = buildScenario(getSnapshot());
   };
   const timer = setInterval(tick, stepMs);
   timer.unref?.();

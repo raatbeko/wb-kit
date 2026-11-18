@@ -8,7 +8,10 @@ import { join } from "node:path";
 import { ROOT } from "../mcp/wb/src/env.js";
 import { WRITE_TOOLS, toolDefinitions } from "../mcp/wb/src/tools.js";
 import { setKey } from "./set-key.js";
-import { featureMap, FEATURES } from "./check.js";
+import { checkDataDir, checkOfficeHooks, checkOfficePort, checkSqlite, featureMap, FEATURES, missingOfficeHooks, OFFICE_HOOK_EVENTS } from "./check.js";
+import { createServer } from "node:http";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { CATEGORIES } from "../mcp/wb/src/diagnostics.js";
 import { markdownToHtml } from "../audit/render-html.js";
 import { renderOfficeHtml } from "./office.js";
@@ -29,6 +32,43 @@ describe(".claude/settings.json", () => {
   });
   it("чтение .env запрещено", () => {
     expect(settings.permissions.deny).toContain("Read(./.env)");
+  });
+});
+
+describe("проверка 3D-офиса (npm run check)", () => {
+  it("хуки офиса подключены в .claude/settings.json набора", () => {
+    expect(missingOfficeHooks(settings as never)).toEqual([]);
+    expect(checkOfficeHooks().status).toBe("ok");
+  });
+  it("находит отключённые события и disableAllHooks", () => {
+    expect(missingOfficeHooks({ hooks: {} })).toEqual(OFFICE_HOOK_EVENTS);
+    const dir = mkdtempSync(join(tmpdir(), "wbkit-check-"));
+    mkdirSync(join(dir, ".claude"));
+    writeFileSync(join(dir, ".claude", "settings.json"), readFileSync(join(ROOT, ".claude", "settings.json")));
+    writeFileSync(join(dir, ".claude", "settings.local.json"), JSON.stringify({ disableAllHooks: true }));
+    const c = checkOfficeHooks(dir);
+    expect(c.status).toBe("warn");
+    expect(c.fix).toMatch(/disableAllHooks/);
+    expect(checkOfficeHooks(join(dir, "нет-такой-папки")).status).toBe("warn");
+  });
+  it("better-sqlite3 загружается, data/ доступна на запись", () => {
+    expect(checkSqlite().status).toBe("ok");
+    expect(checkDataDir(mkdtempSync(join(tmpdir(), "wbkit-data-"))).status).toBe("ok");
+  });
+  it("порт: офис уже запущен / занят чужой программой", async () => {
+    const office = createServer((req, res) => res.end(req.url === "/api/health" ? '{"ok":true}' : "")).listen(0, "127.0.0.1");
+    await new Promise((r) => office.once("listening", r));
+    const officePort = (office.address() as { port: number }).port;
+    expect((await checkOfficePort(officePort)).detail).toMatch(/уже запущен/);
+    office.close();
+
+    const other = createServer((_req, res) => res.end("hello")).listen(0, "127.0.0.1");
+    await new Promise((r) => other.once("listening", r));
+    const otherPort = (other.address() as { port: number }).port;
+    const c = await checkOfficePort(otherPort);
+    expect(c.status).toBe("warn");
+    expect(c.fix).toMatch(/--port/);
+    other.close();
   });
 });
 
