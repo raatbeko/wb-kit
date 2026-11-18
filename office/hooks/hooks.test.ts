@@ -57,12 +57,79 @@ describe("хуки → офис", () => {
     expect(s.recentEvents()).toHaveLength(0);
   });
 
-  it("неизвестная роль клиента считается директором, а не ломает хук", () => {
+  it("встроенные субагенты и свои роли клиента не трогают статус директора", () => {
     const s = office();
-    handleHook(s, { ...inRole("my-custom-role"), hook_event_name: "SubagentStart" });
+    handleHook(s, { ...base, hook_event_name: "UserPromptSubmit", prompt: "x" });
+    handleHook(s, { ...inRole("Explore"), hook_event_name: "SubagentStart" });
+    handleHook(s, { ...inRole("Explore"), hook_event_name: "SubagentStop", last_assistant_message: "нашёл" });
     expect(s.getAgent("director")?.status).toBe("working");
+    expect(s.recentEvents().map((e) => e.message)).toEqual(["Новая задача: x"]);
     handleHook(s, { ...inRole("plugin:logist"), hook_event_name: "SubagentStart" });
     expect(s.getAgent("logist")?.status).toBe("working");
+  });
+
+  it("старое событие не перезаписывает более новый статус (хуки идут не по порядку)", () => {
+    const s = office();
+    const t = Date.now();
+    handleHook(s, { ...base, hook_event_name: "Stop" }, { at: new Date(t).toISOString() });
+    handleHook(s, { ...base, hook_event_name: "PreToolUse", tool_name: "Read", tool_input: {} }, { at: new Date(t - 1000).toISOString() });
+    expect(s.getAgent("director")?.status).toBe("idle");
+  });
+
+  it("«да» записалось раньше запроса — одобрение всё равно «сделано», а не «ждёт» навсегда", () => {
+    const s = office();
+    const req: HookInput = { ...base, hook_event_name: "PermissionRequest", tool_name: "mcp__wb__update_prices", tool_input: {} };
+    const t = Date.now();
+    handleHook(s, { ...req, hook_event_name: "PostToolUse" }, { at: new Date(t - 2000).toISOString() });
+    handleHook(s, req, { at: new Date(t - 3000).toISOString() });
+    handleHook(s, { ...base, hook_event_name: "Stop" }, { at: new Date(t).toISOString() });
+    expect(s.listApprovals({ status: "done" })).toHaveLength(1);
+    expect(s.getAgent("director")?.status).toBe("idle");
+  });
+
+  it("человек нажал «Нет» в окне разрешения: после ответа одобрение отклонено, никто не «ждёт»", () => {
+    const s = office();
+    handleHook(s, { ...base, hook_event_name: "PermissionRequest", tool_name: "mcp__wb__update_prices", tool_input: {} });
+    handleHook(s, { ...base, hook_event_name: "Stop" });
+    expect(s.listApprovals({ status: "rejected" })).toHaveLength(1);
+    expect(s.listAgents().some((a) => a.status === "waiting")).toBe(false);
+    // Следующее разрешённое изменение не «закрывает» старое отклонённое.
+    handleHook(s, { ...base, hook_event_name: "PostToolUse", tool_name: "mcp__wb__update_prices", tool_input: {} });
+    expect(s.listApprovals({ status: "rejected" })).toHaveLength(1);
+    expect(s.listApprovals({ status: "done" })).toHaveLength(1);
+  });
+
+  it("WB не принял изменение после «да» — одобрение с ошибкой", () => {
+    const s = office();
+    handleHook(s, { ...base, hook_event_name: "PermissionRequest", tool_name: "mcp__wb__update_prices", tool_input: {} });
+    handleHook(s, { ...base, hook_event_name: "PostToolUseFailure", tool_name: "mcp__wb__update_prices", error: "400 bad price" });
+    expect(s.listApprovals({ status: "failed" })).toHaveLength(1);
+    expect(s.getAgent("director")?.status).toBe("working");
+  });
+
+  it("одобрения двух окон Claude Code не путаются", () => {
+    const s = office();
+    handleHook(s, { session_id: "A", hook_event_name: "PermissionRequest", tool_name: "mcp__wb__update_prices", tool_input: { w: "A" } });
+    handleHook(s, { session_id: "B", hook_event_name: "PermissionRequest", tool_name: "mcp__wb__update_prices", tool_input: { w: "B" } });
+    handleHook(s, { session_id: "B", hook_event_name: "PostToolUse", tool_name: "mcp__wb__update_prices", tool_input: {} });
+    expect(s.listApprovals({ status: "done" })[0]?.args).toEqual({ w: "B" });
+    expect(s.listApprovals({ status: "pending" })[0]?.args).toEqual({ w: "A" });
+  });
+
+  it("сжатие контекста и /resume не сбрасывают работу", () => {
+    const s = office();
+    handleHook(s, { ...base, hook_event_name: "PermissionRequest", tool_name: "mcp__wb__update_prices", tool_input: {} });
+    handleHook(s, { ...base, hook_event_name: "SessionStart", source: "compact" });
+    expect(s.listApprovals({ status: "pending" })).toHaveLength(1);
+    expect(s.getAgent("director")?.status).toBe("waiting");
+  });
+
+  it("запуск сотрудника из офиса: шаги пишутся на него, а не на директора", () => {
+    const s = office();
+    handleHook(s, { ...base, hook_event_name: "UserPromptSubmit", prompt: "x" }, { mainAgent: "logist" });
+    handleHook(s, { ...base, hook_event_name: "PreToolUse", tool_name: "mcp__wb__get_wb_stocks", tool_input: {} }, { mainAgent: "logist" });
+    expect(s.getAgent("logist")?.activity).toBe("смотрю остатки на складах WB");
+    expect(s.getAgent("director")?.status).toBe("idle");
   });
 
   it("запрос на изменение в кабинете: ждёт «да», после выполнения — сделано", () => {
@@ -98,11 +165,11 @@ describe("хуки → офис", () => {
     expect(s.recentEvents()[0]?.kind).toBe("agent_error");
   });
 
-  it("новый запуск Claude Code сбрасывает зависшие статусы и старые ожидания", () => {
+  it("новый запуск Claude Code сбрасывает зависшие статусы и брошенные час назад ожидания", () => {
     const s = office();
     s.setAgentStatus("logist", "working", "x");
-    handleHook(s, { ...base, hook_event_name: "PermissionRequest", tool_name: "mcp__wb__update_prices", tool_input: {} });
-    handleHook(s, { ...base, hook_event_name: "SessionStart", source: "startup" });
+    handleHook(s, { session_id: "old", hook_event_name: "PermissionRequest", tool_name: "mcp__wb__update_prices", tool_input: {} });
+    handleHook(s, { session_id: "new", hook_event_name: "SessionStart", source: "startup" }, { at: new Date(Date.now() + 2 * 3600_000).toISOString() });
     expect(s.listAgents().every((a) => a.status === "idle")).toBe(true);
     expect(s.listApprovals({ status: "pending" })).toHaveLength(0);
   });
@@ -153,9 +220,15 @@ describe("подключение хуков", () => {
     for (const e of ["SessionStart", "UserPromptSubmit", "SubagentStart", "SubagentStop", "PreToolUse", "PostToolUse", "PermissionRequest", "Stop"]) {
       const hooks = settings.hooks?.[e]?.flatMap((m: { hooks: unknown[] }) => m.hooks) ?? [];
       expect(hooks.length, e).toBeGreaterThan(0);
-      for (const h of hooks as { command: string; async: boolean }[]) {
-        // async: Claude Code не ждёт хук, офис не замедляет работу.
-        expect(h.async, e).toBe(true);
+      const matchers = settings.hooks[e].map((m: { matcher?: string }) => m.matcher ?? "");
+      for (const h of hooks as { command: string; async?: boolean }[]) {
+        // Синхронно — только там, где важен порядок «запрос → да → конец ответа», и только
+        // для инструментов записи WB: обычная работа Claude Code не ждёт хук.
+        if (["PermissionRequest", "PostToolUse"].includes(e)) {
+          expect(h.async, e).toBeFalsy();
+          expect(matchers.join(), e).toMatch(/^mcp__wb__\(/);
+        } else if (e === "Stop") expect(h.async, e).toBeFalsy();
+        else expect(h.async, e).toBe(true);
         const file = /\$CLAUDE_PROJECT_DIR\/([^"]+)/.exec(h.command)?.[1];
         expect(file && existsSync(join(ROOT, file)), `${e}: ${h.command}`).toBe(true);
       }

@@ -16,13 +16,24 @@ import type {
   Task,
   TaskStatus,
 } from "./types.js";
+import type { Snapshot } from "../sync/snapshot.js";
+
+export interface StoredSnapshot {
+  id: string;
+  createdAt: string;
+  snapshot: Snapshot;
+}
 
 export interface OfficeStore {
   listAgents(): Agent[];
   getAgent(id: string): Agent | undefined;
   /** Добавить недостающих сотрудников из штатного расписания, существующих не трогать. */
   ensureAgents(agents: Omit<Agent, "workspaceId" | "status" | "activity" | "updatedAt">[]): void;
-  setAgentStatus(id: string, status: AgentStatus, activity?: string | null): void;
+  /**
+   * `at` — когда случилось событие. Хуки асинхронные и могут записаться не по
+   * порядку: более старое событие не перезапишет более новый статус.
+   */
+  setAgentStatus(id: string, status: AgentStatus, activity?: string | null, at?: string): void;
 
   addEvent(e: NewEvent): OfficeEvent;
   /** События после номера `afterSeq`, по возрастанию, не больше `limit`. */
@@ -34,14 +45,23 @@ export interface OfficeStore {
   updateTask(id: string, patch: Partial<Pick<Task, "status" | "resultReportId">>): Task | undefined;
   listTasks(filter?: { status?: TaskStatus; agentId?: string }): Task[];
 
-  createApproval(a: Pick<Approval, "agentId" | "taskId" | "tool" | "title" | "changes" | "args">): Approval;
+  createApproval(
+    a: Pick<Approval, "agentId" | "taskId" | "tool" | "title" | "changes" | "args"> & { sessionId?: string | null; status?: ApprovalStatus },
+  ): Approval;
+  /**
+   * Переходы: pending → approved | rejected | failed | done; approved → done | failed.
+   * Остальные — нет (повторный клик не выполнит изменение второй раз). undefined — переход не сделан.
+   */
   resolveApproval(id: string, status: Exclude<ApprovalStatus, "pending">): Approval | undefined;
-  listApprovals(filter?: { status?: ApprovalStatus }): Approval[];
+  listApprovals(filter?: { status?: ApprovalStatus; sessionId?: string; agentId?: string; tool?: string }): Approval[];
 
   addReport(r: Omit<Report, "workspaceId" | "id" | "createdAt"> & { createdAt?: string }): Report;
   /** Отчёт по пути — чтобы не заносить один и тот же файл дважды. */
   findReportByPath(path: string): Report | undefined;
   listReports(limit?: number): Report[];
+
+  addSnapshot(s: Snapshot): StoredSnapshot;
+  latestSnapshot(): StoredSnapshot | undefined;
 
   getSetting<T = unknown>(key: string): T | undefined;
   setSetting(key: string, value: unknown): void;

@@ -18,12 +18,15 @@
     "competitors": "tsx scripts/competitors.ts",
     "card": "tsx scripts/card.ts",
     "office": "tsx scripts/office.ts",
-    "office:web": "tsx office/server/index.ts"
+    "office:web": "tsx office/server/index.ts",
+    "office:sync": "tsx office/sync/cli.ts",
+    "office:api": "npm install --no-save @anthropic-ai/claude-agent-sdk@0.3.316"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",
     "better-sqlite3": "12.11.1",
     "exceljs": "4.4.0",
+    "three": "0.186.1",
     "tsx": "4.23.15",
     "zod": "4.6.7"
   },

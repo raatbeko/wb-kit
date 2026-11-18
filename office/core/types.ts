@@ -89,6 +89,8 @@ export interface Approval {
   /** Аргументы инструмента — их выполнит директор/воркер после одобрения. */
   args: Record<string, unknown>;
   status: ApprovalStatus;
+  /** Сеанс Claude Code, из которого пришёл запрос (null — из офиса). */
+  sessionId: string | null;
   createdAt: string;
   resolvedAt: string | null;
 }

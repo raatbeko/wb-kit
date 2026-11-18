@@ -71,7 +71,8 @@ export function describeTool(tool: string, input: Record<string, unknown> = {}):
  * вопросов, а лента офиса видна на экране и лежит в базе.
  */
 export function maskSecrets(s: string): string {
-  return s.replace(/[A-Za-z0-9._\-+/=]{32,}/g, "•••");
+  // От 20 символов: ключи WB, MPSTATS, Claude API длиннее, а обычные слова латиницей — короче.
+  return s.replace(/[A-Za-z0-9._\-+/=]{20,}/g, "•••");
 }
 
 /** Короткая строка для ленты: первая непустая строка, без markdown-шума, не длиннее `max`. */

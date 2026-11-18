@@ -71,8 +71,8 @@ describe("офис агентов (.claude/agents)", () => {
       return { file: f, text, name: field("name"), description: field("description"), tools: list("tools"), disallowed: list("disallowedTools") };
     });
 
-  it("шесть ролей, у каждой имя как у файла и описание", () => {
-    expect(agents.map((a) => a.name).sort()).toEqual(["analyst", "content", "logist", "marketer", "reviews", "scout"]);
+  it("восемь ролей, у каждой имя как у файла и описание", () => {
+    expect(agents.map((a) => a.name).sort()).toEqual(["analyst", "content", "finance", "logist", "marketer", "reports", "reviews", "scout"]);
     for (const a of agents) {
       expect(a.file).toBe(`${a.name}.md`);
       expect(a.description!.length, a.file).toBeGreaterThan(80);

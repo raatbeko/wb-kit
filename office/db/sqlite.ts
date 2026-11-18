@@ -26,19 +26,25 @@ export function listMigrations(dir = MIGRATIONS_DIR): { version: number; file: s
 
 /** Применить недостающие миграции. Версия хранится в PRAGMA user_version. */
 export function migrate(db: DB, dir = MIGRATIONS_DIR): number {
-  const current = db.pragma("user_version", { simple: true }) as number;
-  let version = current;
-  for (const m of listMigrations(dir)) {
-    if (m.version <= version) continue;
-    const sql = readFileSync(m.file, "utf8");
-    // Каждая миграция целиком или никак: при ошибке база остаётся на прошлой версии.
-    db.transaction(() => {
-      db.exec(sql);
-      db.pragma(`user_version = ${m.version}`);
-    })();
-    version = m.version;
-  }
-  return version;
+  const migrations = listMigrations(dir);
+  const latest = migrations.at(-1)?.version ?? 0;
+  if ((db.pragma("user_version", { simple: true }) as number) >= latest) return latest;
+  // Несколько хуков Claude Code стартуют одновременно и все видят новую базу.
+  // IMMEDIATE берёт блокировку записи сразу, а версию читаем уже под ней —
+  // второй процесс дождётся первого и увидит, что миграции применены.
+  // Каждая миграция целиком или никак: при ошибке база остаётся на прошлой версии.
+  return db
+    .transaction(() => {
+      let version = db.pragma("user_version", { simple: true }) as number;
+      for (const m of migrations) {
+        if (m.version <= version) continue;
+        db.exec(readFileSync(m.file, "utf8"));
+        db.pragma(`user_version = ${m.version}`);
+        version = m.version;
+      }
+      return version;
+    })
+    .immediate();
 }
 
 /**

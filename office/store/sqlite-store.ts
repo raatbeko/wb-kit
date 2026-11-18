@@ -3,7 +3,8 @@
  * повторять её поведение — общие тесты в office/office.test.ts.
  */
 import { randomUUID } from "node:crypto";
-import type { OfficeStore } from "../core/ports.js";
+import type { OfficeStore, StoredSnapshot } from "../core/ports.js";
+import type { Snapshot } from "../sync/snapshot.js";
 import {
   LOCAL_WORKSPACE,
   type Agent,
@@ -77,6 +78,7 @@ function toApproval(r: Row): Approval {
     changes: parse(r.changes) ?? [],
     args: parse(r.args) ?? {},
     status: r.status as ApprovalStatus,
+    sessionId: (r.session_id as string | null) ?? null,
     createdAt: r.created_at as string,
     resolvedAt: (r.resolved_at as string | null) ?? null,
   };
@@ -118,16 +120,19 @@ export class SqliteOfficeStore implements OfficeStore {
       VALUES (@ws, @id, @name, @title, @duty, @zone, @at)
       ON CONFLICT (workspace_id, id) DO UPDATE SET name = excluded.name, title = excluded.title,
         duty = excluded.duty, zone = excluded.zone`);
-    const at = now();
+    // Новый сотрудник — «давно не обновлялся»: иначе первое событие хука (время которого
+    // взято до открытия базы) оказалось бы «старше» и не поменяло бы его статус.
+    const at = new Date(0).toISOString();
     this.db.transaction(() => {
       for (const a of agents) stmt.run({ ws: this.workspaceId, ...a, at });
     })();
   }
 
-  setAgentStatus(id: string, status: AgentStatus, activity: string | null = null): void {
+  setAgentStatus(id: string, status: AgentStatus, activity: string | null = null, at?: string): void {
+    const t = at ?? now();
     this.db
-      .prepare("UPDATE agents SET status = ?, activity = ?, updated_at = ? WHERE workspace_id = ? AND id = ?")
-      .run(status, activity, now(), this.workspaceId, id);
+      .prepare("UPDATE agents SET status = ?, activity = ?, updated_at = ? WHERE workspace_id = ? AND id = ? AND updated_at <= ?")
+      .run(status, activity, t, this.workspaceId, id, t);
   }
 
   addEvent(e: NewEvent): OfficeEvent {
@@ -187,33 +192,46 @@ export class SqliteOfficeStore implements OfficeStore {
     ).map(toTask);
   }
 
-  createApproval(a: Pick<Approval, "agentId" | "taskId" | "tool" | "title" | "changes" | "args">): Approval {
+  createApproval(
+    a: Pick<Approval, "agentId" | "taskId" | "tool" | "title" | "changes" | "args"> & { sessionId?: string | null; status?: ApprovalStatus },
+  ): Approval {
+    const at = now();
+    const status = a.status ?? "pending";
     const r = this.db
       .prepare(
-        `INSERT INTO approvals (workspace_id, id, agent_id, task_id, tool, title, changes, args, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?) RETURNING *`,
+        `INSERT INTO approvals (workspace_id, id, agent_id, task_id, tool, title, changes, args, status, session_id, created_at, resolved_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *`,
       )
-      .get(this.workspaceId, randomUUID(), a.agentId, a.taskId, a.tool, a.title, JSON.stringify(a.changes), JSON.stringify(a.args), now()) as Row;
+      .get(
+        this.workspaceId, randomUUID(), a.agentId, a.taskId, a.tool, a.title, JSON.stringify(a.changes), JSON.stringify(a.args),
+        status, a.sessionId ?? null, at, status === "pending" ? null : at,
+      ) as Row;
     return toApproval(r);
   }
 
   resolveApproval(id: string, status: Exclude<ApprovalStatus, "pending">): Approval | undefined {
-    // Из «ждёт» — в одобрено/отклонено; из «одобрено» — в выполнено/ошибка. Иное — не меняем:
-    // так дважды нажатая кнопка не выполнит изменение в кабинете второй раз.
-    const from = status === "approved" || status === "rejected" ? "pending" : "approved";
+    // Из «одобрено» — только в выполнено/ошибка. Из «ждёт» — в любое решение
+    // (в окне Claude Code «да» и выполнение мы видим одним событием).
+    // Иное не меняем: дважды нажатая кнопка не выполнит изменение второй раз.
+    const from = status === "done" || status === "failed" ? ["pending", "approved"] : ["pending"];
     const r = this.db
       .prepare(
-        `UPDATE approvals SET status = ?, resolved_at = ? WHERE workspace_id = ? AND id = ? AND status = ? RETURNING *`,
+        `UPDATE approvals SET status = ?, resolved_at = ? WHERE workspace_id = ? AND id = ? AND status IN (${from.map(() => "?").join(",")}) RETURNING *`,
       )
-      .get(status, now(), this.workspaceId, id, from) as Row | undefined;
+      .get(status, now(), this.workspaceId, id, ...from) as Row | undefined;
     return r && toApproval(r);
   }
 
-  listApprovals(filter: { status?: ApprovalStatus } = {}): Approval[] {
+  listApprovals(filter: { status?: ApprovalStatus; sessionId?: string; agentId?: string; tool?: string } = {}): Approval[] {
+    const f = (v: string | undefined) => [v ?? null, v ?? null];
     return (
       this.db
-        .prepare("SELECT * FROM approvals WHERE workspace_id = ? AND (? IS NULL OR status = ?) ORDER BY created_at DESC")
-        .all(this.workspaceId, filter.status ?? null, filter.status ?? null) as Row[]
+        .prepare(
+          `SELECT * FROM approvals WHERE workspace_id = ?
+             AND (? IS NULL OR status = ?) AND (? IS NULL OR session_id = ?) AND (? IS NULL OR agent_id = ?) AND (? IS NULL OR tool = ?)
+           ORDER BY created_at DESC, rowid DESC`,
+        )
+        .all(this.workspaceId, ...f(filter.status), ...f(filter.sessionId), ...f(filter.agentId), ...f(filter.tool)) as Row[]
     ).map(toApproval);
   }
 
@@ -238,6 +256,31 @@ export class SqliteOfficeStore implements OfficeStore {
         .prepare("SELECT * FROM reports WHERE workspace_id = ? ORDER BY created_at DESC LIMIT ?")
         .all(this.workspaceId, limit) as Row[]
     ).map(toReport);
+  }
+
+  addSnapshot(s: Snapshot): StoredSnapshot {
+    const id = randomUUID();
+    const createdAt = now();
+    this.db
+      .prepare(
+        `INSERT INTO wb_snapshots (workspace_id, id, demo, period_from, period_to, data, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(this.workspaceId, id, s.demo ? 1 : 0, s.period.from, s.period.to, JSON.stringify(s), createdAt);
+    // Храним последние 60 снимков (≈ 2 месяца по разу в день) — база не разрастается.
+    this.db
+      .prepare(
+        `DELETE FROM wb_snapshots WHERE workspace_id = ? AND id NOT IN
+         (SELECT id FROM wb_snapshots WHERE workspace_id = ? ORDER BY created_at DESC LIMIT 60)`,
+      )
+      .run(this.workspaceId, this.workspaceId);
+    return { id, createdAt, snapshot: s };
+  }
+
+  latestSnapshot(): StoredSnapshot | undefined {
+    const r = this.db
+      .prepare("SELECT id, data, created_at FROM wb_snapshots WHERE workspace_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1")
+      .get(this.workspaceId) as { id: string; data: string; created_at: string } | undefined;
+    return r && { id: r.id, createdAt: r.created_at, snapshot: JSON.parse(r.data) as Snapshot };
   }
 
   getSetting<T = unknown>(key: string): T | undefined {

@@ -20,9 +20,14 @@ export class LocalEventBus implements EventBus {
   subscribe(afterSeq: number, onEvent: (e: OfficeEvent) => void): Unsubscribe {
     let last = afterSeq;
     const tick = () => {
-      for (const e of this.store.listEvents(last)) {
-        last = e.seq;
-        onEvent(e);
+      // Ошибка чтения (база занята, повреждена, закрыта) не должна ронять весь сервер офиса.
+      try {
+        for (const e of this.store.listEvents(last)) {
+          last = e.seq;
+          onEvent(e);
+        }
+      } catch (err) {
+        console.error("Офис: не удалось прочитать события:", err instanceof Error ? err.message : err);
       }
     };
     tick();

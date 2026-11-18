@@ -13,11 +13,13 @@ import { BASE_CSS, esc, markdownToHtml } from "../audit/render-html.js";
 /** Порядок и подписи ролей в отчёте. */
 export const ROLES: [file: string, title: string][] = [
   ["аналитик", "Аналитик"],
+  ["финансист", "Финансист"],
   ["логист", "Логист"],
   ["отзывы", "Менеджер отзывов"],
   ["маркетолог", "Маркетолог"],
   ["разведчик", "Разведчик"],
   ["контент", "Контент-мейкер"],
+  ["отчётник", "Отчётник"],
 ];
 
 export function renderOfficeHtml(dir: string, files: Record<string, string>): string {

@@ -93,12 +93,17 @@ describe("события, задачи, одобрения, отчёты", () =>
       changes: [{ item: "Кружка 123", before: "490 ₽", after: "590 ₽" }],
       args: { prices: [{ nmID: 123, price: 590 }] },
     });
-    expect(s.resolveApproval(a.id, "done")).toBeUndefined(); // ещё не одобрено
     expect(s.resolveApproval(a.id, "approved")?.status).toBe("approved");
+    expect(s.resolveApproval(a.id, "approved")).toBeUndefined(); // второй клик «Одобрить» — нет
     expect(s.resolveApproval(a.id, "rejected")).toBeUndefined(); // уже решено
     expect(s.resolveApproval(a.id, "done")?.status).toBe("done");
     expect(s.resolveApproval(a.id, "done")).toBeUndefined(); // второй раз — нет
     expect(s.listApprovals()[0]!.changes[0]!.after).toBe("590 ₽");
+    // Отклонённое нельзя выполнить.
+    const b = s.createApproval({ agentId: "finance", taskId: null, tool: "update_prices", title: "x", changes: [], args: {} });
+    s.resolveApproval(b.id, "rejected");
+    expect(s.resolveApproval(b.id, "done")).toBeUndefined();
+    expect(s.resolveApproval(b.id, "approved")).toBeUndefined();
   });
 
   it("отчёт с тем же путём второй раз не заносится", () => {

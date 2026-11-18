@@ -1,20 +1,23 @@
 /**
  * Хук Claude Code → офис. Вызывается из .claude/settings.json на каждое
- * событие (асинхронно — Claude Code его не ждёт), читает JSON из stdin и
- * пишет событие в data/office.db.
+ * событие, читает JSON из stdin и пишет событие в data/office.db.
+ *
+ * Время события фиксируется первой строкой, до загрузки базы: хуки идут
+ * параллельно, и офис по этому времени понимает, какое событие новее.
+ * Тяжёлые модули грузятся динамически — уже после отметки времени.
  *
  * Главное правило: хук никогда не мешает работе. Любая ошибка — тихо в
  * data/office-hooks.log, код выхода 0, в stdout ничего (stdout хука Claude
  * Code читает как решение).
  */
-import { appendFileSync, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { STAFF } from "../core/staff.js";
-import { DB_PATH } from "../db/sqlite.js";
-import { SqliteOfficeStore } from "../store/sqlite-store.js";
-import { handleHook, type HookInput } from "./handle.js";
+const at = new Date().toISOString();
 
-const dbPath = process.env.OFFICE_DB || DB_PATH;
+import { appendFileSync, mkdirSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const dbPath = process.env.OFFICE_DB || join(ROOT, "data", "office.db");
 const LOG = join(dirname(dbPath), "office-hooks.log");
 
 async function readStdin(): Promise<string> {
@@ -24,27 +27,34 @@ async function readStdin(): Promise<string> {
 }
 
 async function main() {
-  let store: SqliteOfficeStore | undefined;
+  let close: (() => void) | undefined;
   try {
-    const input = JSON.parse(await readStdin()) as HookInput;
+    const raw = await readStdin();
+    const input = JSON.parse(raw);
+    const [{ SqliteOfficeStore }, { STAFF }, { handleHook }, { maskSecrets }] = await Promise.all([
+      import("../store/sqlite-store.js"),
+      import("../core/staff.js"),
+      import("./handle.js"),
+      import("./describe.js"),
+    ]);
     if (process.env.OFFICE_HOOK_DEBUG) {
-      // Сырые данные хука — чтобы сверить поля с документацией. Ключи сюда не попадают:
-      // .env хуки не видят, а запуск set-key Claude не повторяет в чате.
+      // Сырые данные хука — чтобы сверить поля с документацией (похожее на ключи — замаскировано).
       mkdirSync(dirname(LOG), { recursive: true });
-      appendFileSync(join(dirname(dbPath), "office-hooks-raw.jsonl"), JSON.stringify(input) + "\n");
+      appendFileSync(join(dirname(dbPath), "office-hooks-raw.jsonl"), maskSecrets(JSON.stringify(input)) + "\n");
     }
-    store = new SqliteOfficeStore(dbPath);
+    const store = new SqliteOfficeStore(dbPath);
+    close = () => store.close();
     store.ensureAgents(STAFF);
-    handleHook(store, input);
+    handleHook(store, input, { mainAgent: process.env.OFFICE_AGENT, at });
   } catch (err) {
     try {
       mkdirSync(dirname(LOG), { recursive: true });
-      appendFileSync(LOG, `${new Date().toISOString()} ${err instanceof Error ? err.stack ?? err.message : String(err)}\n`);
+      appendFileSync(LOG, `${new Date().toISOString()} ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
     } catch {
       /* даже записать ошибку не вышло — всё равно не мешаем Claude Code */
     }
   } finally {
-    store?.close();
+    close?.();
   }
 }
 

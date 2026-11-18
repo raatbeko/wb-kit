@@ -78,37 +78,13 @@
         ]
       }
     ],
-    "PostToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node --import tsx \"$CLAUDE_PROJECT_DIR/office/hooks/event.ts\"",
-            "async": true,
-            "timeout": 30
-          }
-        ]
-      }
-    ],
-    "PostToolUseFailure": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node --import tsx \"$CLAUDE_PROJECT_DIR/office/hooks/event.ts\"",
-            "async": true,
-            "timeout": 30
-          }
-        ]
-      }
-    ],
     "PermissionRequest": [
       {
+        "matcher": "mcp__wb__(update_prices|update_fbs_stocks|create_fbs_supply|add_orders_to_fbs_supply|deliver_fbs_supply|reply_feedback|reply_question)",
         "hooks": [
           {
             "type": "command",
             "command": "node --import tsx \"$CLAUDE_PROJECT_DIR/office/hooks/event.ts\"",
-            "async": true,
             "timeout": 30
           }
         ]
@@ -116,11 +92,36 @@
     ],
     "PermissionDenied": [
       {
+        "matcher": "mcp__wb__(update_prices|update_fbs_stocks|create_fbs_supply|add_orders_to_fbs_supply|deliver_fbs_supply|reply_feedback|reply_question)",
         "hooks": [
           {
             "type": "command",
             "command": "node --import tsx \"$CLAUDE_PROJECT_DIR/office/hooks/event.ts\"",
             "async": true,
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__wb__(update_prices|update_fbs_stocks|create_fbs_supply|add_orders_to_fbs_supply|deliver_fbs_supply|reply_feedback|reply_question)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --import tsx \"$CLAUDE_PROJECT_DIR/office/hooks/event.ts\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "mcp__wb__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --import tsx \"$CLAUDE_PROJECT_DIR/office/hooks/event.ts\"",
             "timeout": 30
           }
         ]
@@ -144,7 +145,6 @@
           {
             "type": "command",
             "command": "node --import tsx \"$CLAUDE_PROJECT_DIR/office/hooks/event.ts\"",
-            "async": true,
             "timeout": 30
           }
         ]
