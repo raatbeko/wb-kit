@@ -8,10 +8,12 @@
  *   setWall({ title, kpis, weekly, urgent, fresh, waiting }) — большой экран на стене;
  *   select(id), addPaper(id), handoff(from, to), celebrate(id), setActive(on).
  * Персонажа потом можно заменить на GLB-модель — интерфейс не изменится.
+ * Позы и действия сотрудников (печатает, пьёт кофе, машет, идёт к кулеру) — в anim.js.
  */
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer.js";
+import { damp, kitchenRoute, pickIdle, pickWork, seated, targetPose, turnTo } from "./anim.js";
 
 /** Где сидит каждый сотрудник, как выглядит и какие вещи у него на столе. */
 export const LAYOUT = {
@@ -192,7 +194,7 @@ function makeDesk(big) {
   const chair = makeChair();
   chair.position.z = -0.95;
   g.add(chair);
-  return { group: g, screenMat, canvas, tex, lampMat, papers, width: w };
+  return { group: g, screenMat, canvas, tex, lampMat, papers, mug, width: w };
 }
 
 /** Личные вещи по роли — сразу видно, кто чем занят. */
@@ -285,28 +287,46 @@ function addProps(desk, kind, w) {
   }
 }
 
-/** Сотрудник: тело, голова с глазами (моргают) и ртом, руки, ноги, аксессуар роли. */
+/**
+ * Сотрудник со скелетом: корпус (наклон), голова (глаза моргают, зрачки смотрят,
+ * рот говорит и улыбается), руки с локтями, ноги с коленями — может встать и пройтись.
+ * Углы суставов задаёт anim.js, здесь только «кости» и меши.
+ */
 function makePerson(look, seed) {
   const p = new THREE.Group();
   const skin = SKIN[seed % SKIN.length];
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.45, 6, 16), mat(look.shirt));
-  body.position.y = 1.02;
-  body.castShadow = true;
-  p.add(body);
-  // Ноги — сидит: бёдра вперёд, голени вниз.
+  const pants = 0x34495e;
+  // Ноги: бедро от тазобедренного сустава, голень от колена.
+  const legs = [];
   for (const sx of [-1, 1]) {
-    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.32, 4, 8), mat(0x34495e));
-    thigh.rotation.x = Math.PI / 2;
-    thigh.position.set(sx * 0.13, 0.62, 0.2);
-    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.36, 4, 8), mat(0x34495e));
-    shin.position.set(sx * 0.13, 0.35, 0.42);
-    const shoe = box(0.13, 0.08, 0.22, 0x1c1c1c);
-    shoe.position.set(sx * 0.13, 0.06, 0.48);
-    p.add(thigh, shin, shoe);
+    const hip = new THREE.Group();
+    hip.position.set(sx * 0.13, 0.62, 0.02);
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.095, 0.3, 4, 8), mat(pants));
+    thigh.position.y = -0.2;
+    thigh.castShadow = true;
+    const knee = new THREE.Group();
+    knee.position.y = -0.42;
+    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.34, 4, 8), mat(pants));
+    shin.position.y = -0.26;
+    shin.castShadow = true;
+    const shoe = box(0.14, 0.08, 0.24, 0x1c1c1c);
+    shoe.position.set(0, -0.52, 0.05);
+    knee.add(shin, shoe);
+    hip.add(thigh, knee);
+    p.add(hip);
+    legs.push({ hip, knee });
   }
+  // Всё выше пояса — в корпусе: наклоняется и поворачивается целиком.
+  const torso = new THREE.Group();
+  torso.position.y = 0.62;
+  p.add(torso);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.45, 6, 16), mat(look.shirt));
+  body.position.y = 0.4;
+  body.castShadow = true;
+  torso.add(body);
   const headPivot = new THREE.Group();
-  headPivot.position.y = 1.55;
-  p.add(headPivot);
+  headPivot.position.y = 0.93;
+  torso.add(headPivot);
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 24, 18), mat(skin));
   head.position.y = 0.12;
   head.castShadow = true;
@@ -316,36 +336,69 @@ function makePerson(look, seed) {
   hair.rotation.x = -0.25;
   headPivot.add(hair);
   const eyes = [];
+  const pupils = [];
   for (const sx of [-1, 1]) {
     const white = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 10), mat(0xffffff));
     white.position.set(sx * 0.09, 0.16, 0.225);
     const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.027, 10, 8), mat(0x1a1a1a));
-    pupil.position.set(sx * 0.09, 0.16, 0.268);
+    pupil.position.set(sx * 0.09, 0.16, 0.266);
+    pupil.userData.x0 = sx * 0.09;
     headPivot.add(white, pupil);
     eyes.push(white, pupil);
+    pupils.push(pupil);
+  }
+  // Брови — поднимаются, когда сотрудник радуется или ждёт.
+  const brows = [];
+  for (const sx of [-1, 1]) {
+    const brow = box(0.08, 0.018, 0.02, look.hair);
+    brow.position.set(sx * 0.09, 0.235, 0.24);
+    brow.rotation.z = sx * -0.12;
+    headPivot.add(brow);
+    brows.push(brow);
   }
   const mouth = box(0.09, 0.015, 0.02, 0x8e4a3a);
   mouth.position.set(0, 0.04, 0.25);
   headPivot.add(mouth);
+  // Руки: плечо → локоть → кисть.
   const arms = [];
+  const elbows = [];
+  const hands = [];
   for (const sx of [-1, 1]) {
-    const pivot = new THREE.Group();
-    pivot.position.set(sx * 0.33, 1.28, 0);
-    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.42, 4, 8), mat(look.shirt));
-    arm.position.y = -0.25;
-    arm.castShadow = true;
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), mat(skin));
-    hand.position.y = -0.5;
-    pivot.add(arm, hand);
-    pivot.rotation.x = -1.1;
-    p.add(pivot);
-    arms.push(pivot);
+    const shoulder = new THREE.Group();
+    shoulder.position.set(sx * 0.33, 0.66, 0);
+    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.078, 0.2, 4, 8), mat(look.shirt));
+    upper.position.y = -0.14;
+    upper.castShadow = true;
+    const elbow = new THREE.Group();
+    elbow.position.y = -0.28;
+    const fore = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.18, 4, 8), mat(look.shirt));
+    fore.position.y = -0.13;
+    fore.castShadow = true;
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), mat(skin));
+    hand.position.y = -0.3;
+    elbow.add(fore, hand);
+    shoulder.add(upper, elbow);
+    torso.add(shoulder);
+    arms.push(shoulder);
+    elbows.push(elbow);
+    hands.push(hand);
   }
+  // Кружка в левой руке (кофе за столом и у кулера) и телефон в правой.
+  const cup = cyl(0.05, 0.045, 0.11, ACCENT, 12);
+  cup.position.set(0.04, -0.33, 0.06);
+  cup.visible = false;
+  elbows[0].add(cup);
+  const phone = box(0.09, 0.015, 0.16, 0x15151a);
+  phone.position.set(-0.03, -0.36, 0.05);
+  phone.rotation.x = 0.4;
+  phone.visible = false;
+  elbows[1].add(phone);
+
   const acc = look.acc;
   if (acc === "tie") {
     const tie = box(0.09, 0.35, 0.02, 0xc0392b);
-    tie.position.set(0, 1.18, 0.29);
-    p.add(tie);
+    tie.position.set(0, 0.56, 0.29);
+    torso.add(tie);
   } else if (acc === "glasses") {
     for (const sx of [-1, 1]) {
       const lens = new THREE.Mesh(new THREE.TorusGeometry(0.065, 0.012, 6, 16), mat(0x111111));
@@ -371,7 +424,7 @@ function makePerson(look, seed) {
     beret.rotation.z = 0.2;
     headPivot.add(beret);
   }
-  return { group: p, body, headPivot, arms, eyes };
+  return { group: p, torso, body, headPivot, arms, elbows, hands, legs, eyes, pupils, brows, mouth, cup, phone, headset: acc === "headset" };
 }
 
 /* ---------- Сцена ---------- */
@@ -739,7 +792,14 @@ export class Office3D {
     bang.visible = false;
     root.add(bang);
 
-    const p = { id: agent.id, root, desk, person, nameEl, bubbleEl, bang, status: "idle", phase: i * 1.7, papers: 0, monitor: { name: agent.name, headline: null, stats: [], status: "idle" }, blinkAt: 2 + i, cheerUntil: 0 };
+    const p = {
+      id: agent.id, root, desk, person, nameEl, bubbleEl, bang, status: "idle", phase: i * 1.7, papers: 0,
+      monitor: { name: agent.name, headline: null, stats: [], status: "idle" },
+      blinkAt: 2 + i, cheerUntil: 0,
+      // Анимация: текущая поза, где стоит (относительно стола), куда смотрит, что делает.
+      pose: seated(), pos: { x: 0, z: -0.95 }, yaw: 0, stand: 0, swivel: 0,
+      action: null, nextAction: 3 + i * 1.3, work: null, walk: null, waveUntil: 0, throwUntil: 0,
+    };
     this.people.set(agent.id, p);
     this.setAgent(agent.id, agent.status, agent.activity);
     this.drawMonitor(p);
@@ -918,6 +978,7 @@ export class Office3D {
     const to = b.root.position.clone().add(new THREE.Vector3(0, 1.0, 0));
     const mid = from.clone().lerp(to, 0.5).add(new THREE.Vector3(0, 2.6, 0));
     this.scene.add(sheet);
+    a.throwUntil = this.timer.getElapsed() + 0.7;
     this.flights.push({ obj: sheet, curve: new THREE.QuadraticBezierCurve3(from, mid, to), t: 0, dur: 1.1, done: () => this.celebrate(toId, 0.4) });
   }
 
@@ -926,7 +987,178 @@ export class Office3D {
     const p = this.people.get(id);
     if (!p) return;
     p.cheerUntil = this.timer.getElapsed() + seconds;
+    p.cheerDur = seconds;
   }
+
+  /* ---------- Анимация сотрудника ---------- */
+
+  /** Один кадр одного сотрудника: выбрать действие, посчитать позу, подвести к ней скелет. */
+  animatePerson(p, t, dt, m, slot) {
+    const { person } = p;
+    const ph = t + p.phase;
+    const idle = p.status === "idle" && !p.saying;
+
+    // Свободен — время от времени что-то делает: потягивается, пьёт кофе, идёт к кулеру.
+    if (!idle) p.action = null;
+    else if (!p.walk && !this.reduceMotion && t > p.nextAction) {
+      const canWalk = slot.free && p.id !== "director" && p.id !== this.selected;
+      const a = pickIdle(Math.random, { headset: person.headset, canWalk });
+      if (a.kind === "walk") {
+        this.startWalk(p, t);
+        slot.free = false;
+      } else p.action = { ...a, start: t, dir: Math.random() < 0.5 ? -1 : 1 };
+      p.nextAction = t + a.dur + 2.5 + Math.random() * 5;
+    }
+    if (p.action && t > p.action.start + p.action.dur) p.action = null;
+    // Работает — печатает, сверяется с бумагами, водит мышкой, думает.
+    if (p.status === "working" && !p.walk) {
+      if (!p.work || t > p.work.start + p.work.dur) p.work = { ...pickWork(Math.random, p.id), start: t };
+    } else p.work = null;
+
+    const walk = p.walk ? this.stepWalk(p, t, dt) : null;
+
+    // Смотрит на вас, когда на него навели, позвали, он ждёт решения или говорит на планёрке.
+    let look = null;
+    if (!walk && (p.id === this.hovered || p.id === this.selected || p.status === "waiting" || p.saying || p.waveUntil > t)) {
+      const c = this.camera.position;
+      const dx = c.x - (p.root.position.x + p.pos.x);
+      const dz = c.z - (p.root.position.z + p.pos.z);
+      const dy = c.y - 1.6;
+      const strong = p.id === this.hovered || p.saying || p.waveUntil > t;
+      look = { yaw: Math.atan2(dx, dz) - p.yaw - p.swivel, pitch: -Math.atan2(dy, Math.hypot(dx, dz)) * 0.7, weight: strong ? 1 : 0.6 };
+    }
+    const left = (until, dur) => (until > t ? 1 - (until - t) / dur : 0);
+    const tgt = targetPose({
+      status: p.status, t, ph, m, action: p.action, work: p.work, walk, saying: p.saying, look,
+      cheer: left(p.cheerUntil, p.cheerDur ?? 1.1),
+      wave: left(p.waveUntil, p.waveDur ?? 1.4),
+      throwing: left(p.throwUntil, 0.7),
+    });
+    const P = damp(p.pose, tgt, 1 - Math.exp(-dt * (walk ? 24 : 12)));
+
+    // Крутится на кресле — только в действии swivel.
+    const sw = p.action?.kind === "swivel" ? Math.sin(((t - p.action.start) / p.action.dur) * Math.PI * 2) * 0.55 * p.action.dir : 0;
+    p.swivel += (sw - p.swivel) * (1 - Math.exp(-dt * 5));
+
+    person.group.position.set(p.pos.x, -0.05 + 0.42 * p.stand, p.pos.z);
+    person.group.rotation.y = p.yaw + p.swivel;
+    person.torso.rotation.set(P.torsoX, P.torsoY, P.torsoZ);
+    person.torso.position.y = 0.62 + P.lift;
+    person.headPivot.rotation.set(P.headX, P.headY, P.headZ);
+    person.arms[0].rotation.set(P.shLx, 0, P.shLz);
+    person.arms[1].rotation.set(P.shRx, 0, P.shRz);
+    person.elbows[0].rotation.x = P.elL;
+    person.elbows[1].rotation.x = P.elR;
+    person.legs[0].hip.rotation.x = P.hipL;
+    person.legs[0].knee.rotation.x = P.kneeL;
+    person.legs[1].hip.rotation.x = P.hipR;
+    person.legs[1].knee.rotation.x = P.kneeR;
+    person.mouth.scale.set(0.09 * (1 + P.smile * 0.5), 0.015 * (1 + P.mouth * 3.5), 0.02);
+    for (const pu of person.pupils) pu.position.set(pu.userData.x0 + P.pupX * 0.018, 0.16 + P.pupY * 0.014, 0.266);
+    for (const br of person.brows) br.position.y = 0.235 + P.smile * 0.018;
+    person.body.scale.y = 1 + Math.sin(ph * 2) * 0.015 * m;
+
+    // Кружка: за столом берёт со стола, у кулера наливает себе и несёт обратно.
+    const u = p.action ? (t - p.action.start) / p.action.dur : 0;
+    const sipping = p.action?.kind === "sip" && u > 0.15 && u < 0.85;
+    person.cup.visible = sipping || Boolean(walk?.cup);
+    p.desk.mug.visible = !sipping;
+    person.phone.visible = p.action?.kind === "phone" && u > 0.1 && u < 0.9;
+
+    // Моргание раз в несколько секунд.
+    const blink = t > p.blinkAt && t < p.blinkAt + 0.12;
+    if (t > p.blinkAt + 0.12) p.blinkAt = t + 2.5 + ((p.phase * 13) % 3);
+    for (const e of person.eyes) e.scale.y = blink ? 0.15 : 1;
+
+    if (p.status === "working" && Math.floor(t / 0.3) !== p.lastTick) {
+      // Бегущие строки на мониторе — раз в 0,3 с.
+      p.lastTick = Math.floor(t / 0.3);
+      this.drawMonitor(p, t);
+    }
+    if (p.bang.visible) p.bang.position.y = 2.15 + Math.abs(Math.sin(ph * 4)) * 0.2 * m;
+  }
+
+  /** Встать и сходить к кулеру или кофемашине. */
+  startWalk(p, t) {
+    p.action = null;
+    p.walk = { stage: "rise", route: kitchenRoute(p.root.position, Math.random), i: 0, phase: 0, t0: t, hurry: false };
+    this.walkCooldown = t + 35;
+  }
+
+  /**
+   * Шаг прогулки: встаёт → идёт → пьёт → идёт обратно → садится.
+   * Позвали (клик, планёрка, новая задача) — разворачивается и быстро идёт к столу.
+   */
+  stepWalk(p, t, dt) {
+    const w = p.walk;
+    if (!w.hurry && (p.status !== "idle" || this.tourState || p.id === this.selected)) w.hurry = true;
+    const seat = { x: 0, z: -0.95 };
+    const speed = w.hurry ? 4.2 : 1.9;
+    const k = (r) => 1 - Math.exp(-dt * r);
+    let moving = false;
+    const go = (path, onEnd) => {
+      const target = path[w.i];
+      const dx = target.x - p.pos.x;
+      const dz = target.z - p.pos.z;
+      const d = Math.hypot(dx, dz);
+      const step = speed * dt;
+      if (d > 1e-4) p.yaw = turnTo(p.yaw, Math.atan2(dx, dz), k(10));
+      if (d <= step) {
+        p.pos.x = target.x;
+        p.pos.z = target.z;
+        w.i++;
+        if (w.i >= path.length) onEnd();
+      } else {
+        p.pos.x += (dx / d) * step;
+        p.pos.z += (dz / d) * step;
+      }
+      moving = true;
+      w.phase += dt * speed * 4.2;
+    };
+    const turnBack = (path) => {
+      w.stage = "back";
+      w.back = [...path, seat];
+      w.i = 0;
+    };
+
+    if (w.stage === "rise") {
+      p.stand += (1 - p.stand) * k(w.hurry ? 12 : 6);
+      if (w.hurry) w.stage = "sit";
+      else if (p.stand > 0.96) {
+        p.stand = 1;
+        w.stage = "go";
+        w.i = 0;
+      }
+    } else if (w.stage === "go") {
+      if (w.hurry) turnBack(w.route.slice(0, w.i).reverse());
+      else
+        go(w.route, () => {
+          w.stage = "drink";
+          w.t0 = t;
+        });
+    } else if (w.stage === "drink") {
+      p.yaw = turnTo(p.yaw, Math.PI, k(6));
+      if (w.hurry || t - w.t0 > 3.4) turnBack(w.route.slice(0, -1).reverse());
+    } else if (w.stage === "back") {
+      go(w.back, () => (w.stage = "sit"));
+    } else if (w.stage === "sit") {
+      p.pos.x += (seat.x - p.pos.x) * k(10);
+      p.pos.z += (seat.z - p.pos.z) * k(10);
+      p.yaw = turnTo(p.yaw, 0, k(8));
+      p.stand += (0 - p.stand) * k(w.hurry ? 12 : 6);
+      if (p.stand < 0.02 && Math.abs(p.yaw) < 0.02) {
+        p.stand = 0;
+        p.yaw = 0;
+        p.pos.x = seat.x;
+        p.pos.z = seat.z;
+        p.walk = null;
+        p.nextAction = t + 4 + Math.random() * 4;
+      }
+    }
+    const drinking = w.stage === "drink" ? Math.min(1, (t - w.t0) / 3.4) : 0;
+    return { stand: p.stand, moving: moving && w.stage !== "sit", phase: w.phase, carry: w.stage === "back", drinking, cup: w.stage === "drink" || w.stage === "back" };
+  }
+
 
   select(id) {
     this.selected = id ?? null;
@@ -938,6 +1170,10 @@ export class Office3D {
       this.flyTo(this.home.pos, this.home.target);
       return;
     }
+    // Сотрудник замечает, что его позвали: возвращается к столу и машет.
+    if (p.walk) p.walk.hurry = true;
+    p.waveUntil = this.timer.getElapsed() + 1.4;
+    p.waveDur = 1.4;
     this.spot.position.copy(p.root.position).add(new THREE.Vector3(0, 2.6, -0.4));
     this.spot.intensity = 9;
     this.placeRing(p);
@@ -1037,6 +1273,14 @@ export class Office3D {
       const id = h?.agentId ?? null;
       if (id !== this.hovered) {
         this.hovered = id;
+        // Навели на свободного сотрудника — он оборачивается и машет (не чаще раза в 6 секунд).
+        const hp = this.people.get(id);
+        const now = this.timer.getElapsed();
+        if (hp && hp.status === "idle" && !hp.walk && now - (hp.hoverWaveAt ?? -99) > 6) {
+          hp.hoverWaveAt = now;
+          hp.waveUntil = now + 1.1;
+          hp.waveDur = 1.1;
+        }
         const p = this.people.get(id ?? this.selected);
         if (p) this.placeRing(p);
         else this.ring.visible = false;
@@ -1113,7 +1357,7 @@ export class Office3D {
     // «Ждёт решения» и «ошибка» могут висеть часами — для прыгающего «!» хватает редких кадров.
     // Человек крутит камеру — рисуем каждый кадр, иначе вращение дёргается.
     const moving = performance.now() - (this.movedAt ?? 0) < 400;
-    const busy = moving || this.fly || this.flights.length || [...this.people.values()].some((p) => p.status === "working" || p.cheerUntil > t || this.tourState);
+    const busy = moving || this.fly || this.flights.length || this.tourState || [...this.people.values()].some((p) => p.status === "working" || p.walk || p.cheerUntil > t || p.waveUntil > t || p.throwUntil > t);
     this.skip = (this.skip ?? 0) + 1;
     if (!busy && this.skip % 3 !== 0) {
       this.controls.update();
@@ -1140,39 +1384,11 @@ export class Office3D {
       }
     }
 
-    for (const p of this.people.values()) {
-      const ph = t + p.phase;
-      const { person } = p;
-      const cheering = p.cheerUntil > t;
-      if (cheering) {
-        person.arms[0].rotation.x = person.arms[1].rotation.x = -2.9 + Math.sin(ph * 12) * 0.15 * m;
-        person.arms[0].rotation.z = -0.3;
-        person.arms[1].rotation.z = 0.3;
-        person.headPivot.rotation.x = -0.15;
-      } else if (p.status === "working") {
-        person.arms[0].rotation.z = person.arms[1].rotation.z = 0;
-        person.arms[0].rotation.x = -1.15 + Math.sin(ph * 14) * 0.12 * m;
-        person.arms[1].rotation.x = -1.15 + Math.sin(ph * 14 + Math.PI) * 0.12 * m;
-        person.headPivot.rotation.x = 0.1 + Math.sin(ph * 3) * 0.04 * m;
-        person.headPivot.rotation.y = 0;
-        // Бегущие строки на мониторе — раз в 0,3 с.
-        if (Math.floor(t / 0.3) !== p.lastTick) {
-          p.lastTick = Math.floor(t / 0.3);
-          this.drawMonitor(p, t);
-        }
-      } else {
-        person.arms[0].rotation.z = person.arms[1].rotation.z = 0;
-        person.arms[0].rotation.x = person.arms[1].rotation.x = -0.9;
-        person.headPivot.rotation.y = Math.sin(ph * 0.5) * 0.35 * m;
-        person.headPivot.rotation.x = 0;
-      }
-      // Моргание раз в несколько секунд.
-      const blink = t > p.blinkAt && t < p.blinkAt + 0.12;
-      if (t > p.blinkAt + 0.12) p.blinkAt = t + 2.5 + ((p.phase * 13) % 3);
-      for (const e of person.eyes) e.scale.y = blink ? 0.15 : 1;
-      person.body.scale.y = 1 + Math.sin(ph * 2) * 0.015 * m;
-      if (p.bang.visible) p.bang.position.y = 2.15 + Math.abs(Math.sin(ph * 4)) * 0.2 * m;
-    }
+    // Своё dt: в спокойные минуты кадры пропускаются, а движения должны идти с той же скоростью.
+    const adt = Math.min(t - (this.animT ?? t), 0.1);
+    this.animT = t;
+    const slot = { free: !this.reduceMotion && !this.tourState && t > (this.walkCooldown ?? 25) && ![...this.people.values()].some((q) => q.walk) };
+    for (const p of this.people.values()) this.animatePerson(p, t, adt, m, slot);
     if (this.ring.visible) this.ring.material.opacity = 0.6 + Math.sin(t * 4) * 0.25;
 
     // Часы — настоящее время.
