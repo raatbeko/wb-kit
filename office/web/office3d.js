@@ -165,7 +165,7 @@ function makeDesk(big) {
   frame.position.y = 0.33;
   const screenMat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false });
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.94, 0.58), screenMat);
-  screen.position.set(0, 0.33, -0.03);
+  screen.position.set(0, 0.33, -0.035);
   screen.rotation.y = Math.PI;
   const stand = box(0.08, 0.18, 0.08, 0x1d1d22);
   stand.position.y = -0.06;
@@ -232,7 +232,7 @@ function addProps(desk, kind, w) {
     const m2 = new THREE.Group();
     const fr = box(0.62, 0.42, 0.04, 0x1d1d22);
     const sc = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.36), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
-    sc.position.z = -0.025;
+    sc.position.z = -0.03;
     sc.rotation.y = Math.PI;
     m2.add(fr, sc);
     m2.position.set(-0.75, 1.2, 0.12);
@@ -550,11 +550,11 @@ export class Office3D {
     add(floor);
     const rug = new THREE.Mesh(new THREE.PlaneGeometry(17.5, 9.2), mat(0x9c8a72, { roughness: 1 }));
     rug.rotation.x = -Math.PI / 2;
-    rug.position.set(0, 0.006, 1.5);
+    rug.position.set(0, 0.02, 1.5);
     rug.receiveShadow = true;
     const rugEdge = new THREE.Mesh(new THREE.PlaneGeometry(18, 9.7), mat(0x7b6a55, { roughness: 1 }));
     rugEdge.rotation.x = -Math.PI / 2;
-    rugEdge.position.set(0, 0.004, 1.5);
+    rugEdge.position.set(0, 0.01, 1.5);
     rugEdge.receiveShadow = true;
     add(rugEdge, rug);
 
@@ -586,7 +586,8 @@ export class Office3D {
     const wall = canvasTex(1024, 512, () => {});
     this.wall = wall;
     const screen = new THREE.Mesh(new THREE.PlaneGeometry(5.6, 2.8), new THREE.MeshBasicMaterial({ map: wall.tex, toneMapped: false }));
-    screen.position.set(0, 1.95, -11.3);
+    // Экран на 2 см перед рамкой: в одной плоскости с её передней гранью он мерцал (z-fighting).
+    screen.position.set(0, 1.95, -11.28);
     screen.userData.wall = true;
     const screenFrame = box(5.8, 3.0, 0.06, 0x16161b);
     screenFrame.position.set(0, 1.95, -11.33);
@@ -1358,8 +1359,10 @@ export class Office3D {
     // Человек крутит камеру — рисуем каждый кадр, иначе вращение дёргается.
     const moving = performance.now() - (this.movedAt ?? 0) < 400;
     const busy = moving || this.fly || this.flights.length || this.tourState || [...this.people.values()].some((p) => p.status === "working" || p.walk || p.cheerUntil > t || p.waveUntil > t || p.throwUntil > t);
+    // Свободные сотрудники потягиваются и пьют кофе — на 20 кадрах это видно рывками, им хватает 30.
+    const fidget = !busy && [...this.people.values()].some((p) => p.action || Math.abs(p.swivel) > 0.01);
     this.skip = (this.skip ?? 0) + 1;
-    if (!busy && this.skip % 3 !== 0) {
+    if (!busy && this.skip % (fidget ? 2 : 3) !== 0) {
       this.controls.update();
       return;
     }
