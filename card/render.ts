@@ -83,7 +83,7 @@ a{color:var(--accent)}.ok{color:var(--good);font-weight:700}.no{color:var(--mute
 .compare{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0}.title-box{font-weight:600;font-size:16px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0}
 .desc{border:1px solid var(--line);border-radius:10px;padding:10px 12px;white-space:pre-wrap;font-size:14px;max-height:420px;overflow:auto}
 .new{border-color:var(--good)}tr.new td{color:var(--good)}.warn-box{border:1px solid var(--warn);border-radius:10px;padding:4px 12px;margin-bottom:12px;color:var(--warn)}
-.chars td:first-child{color:var(--muted);width:40%}.findings li{margin:4px 0}.intro{border-left:4px solid var(--accent);padding-left:12px;margin-bottom:12px}.intro p{max-width:80ch}.rest{margin-top:12px}
+.chars td:first-child{color:var(--muted);width:40%}.findings li{margin:4px 0}.intro{background:var(--accent-soft);border-radius:8px;padding:10px 14px;margin-bottom:14px}.intro p{max-width:80ch}.rest{margin-top:12px}
 @media (max-width:700px){.compare{grid-template-columns:1fr}}
 </style></head><body><div class="wrap">
 <header><div><h1>Карточка товара${r.input.demo ? '<span class="badge">ДЕМО</span>' : ""}</h1><div class="sub">${esc(o.title)} · <a href="${productUrl(o.nmId)}">${o.nmId}</a>${o.vendorCode ? ` · ${esc(o.vendorCode)}` : ""} · ${esc(o.subject)}</div></div><div class="sub">${esc(date)}</div></header>

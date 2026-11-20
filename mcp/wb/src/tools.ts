@@ -709,7 +709,7 @@ export function summarizeFinance(rows: Row[], topProducts: number) {
     salesCount: 0, returnsCount: 0, sales: 0, returns: 0, forPaySales: 0, forPayReturns: 0,
     logistics: 0, storage: 0, acceptance: 0, penalties: 0, deductions: 0, additionalPayments: 0, acquiring: 0,
   };
-  type P = { nmId: number; vendorCode: string; title: string; salesCount: number; sales: number; returns: number; forPay: number; logistics: number; penalties: number };
+  type P = { nmId: number; vendorCode: string; title: string; salesCount: number; sales: number; returns: number; forPay: number; logistics: number; penalties: number; storage: number };
   const byProduct = new Map<number, P>();
   const reasons = new Map<string, number>();
   for (const r of rows) {
@@ -743,13 +743,15 @@ export function summarizeFinance(rows: Row[], topProducts: number) {
     if (!nmId) continue;
     let p = byProduct.get(nmId);
     if (!p) {
-      p = { nmId, vendorCode: String(r["vendorCode"] ?? ""), title: String(r["title"] || r["subjectName"] || ""), salesCount: 0, sales: 0, returns: 0, forPay: 0, logistics: 0, penalties: 0 };
+      p = { nmId, vendorCode: String(r["vendorCode"] ?? ""), title: String(r["title"] || r["subjectName"] || ""), salesCount: 0, sales: 0, returns: 0, forPay: 0, logistics: 0, penalties: 0, storage: 0 };
       byProduct.set(nmId, p);
     }
     if (isSale) { p.salesCount += qty; p.sales += amount; p.forPay += forPay; }
     if (isReturn) { p.salesCount -= qty; p.returns += amount; p.forPay -= forPay; }
     p.logistics += logistics;
     p.penalties += penalty;
+    // Хранение WB часто пишет одной строкой на весь магазин без nmId — тогда по товарам его нет.
+    p.storage += num(r["paidStorage"]);
   }
   const r2 = Object.fromEntries(Object.entries(t).map(([k, v]) => [k, round2(v)])) as typeof t;
   // «На руки» до себестоимости, налогов и рекламы: к перечислению за выкупы минус
@@ -763,6 +765,7 @@ export function summarizeFinance(rows: Row[], topProducts: number) {
       forPay: round2(p.forPay),
       logistics: round2(p.logistics),
       penalties: round2(p.penalties),
+      storage: round2(p.storage),
       afterLogistics: round2(p.forPay - p.logistics - p.penalties),
     }))
     .sort((a, b) => b.sales - a.sales);

@@ -83,13 +83,20 @@ export async function renderXlsx(r: AuditReport, file: string): Promise<void> {
       { header: "Логистика, ₽", key: "logistics", width: 12, numFmt: RUB },
       { header: "Штрафы, ₽", key: "penalties", width: 10, numFmt: RUB },
       { header: "После логистики, ₽", key: "afterLogistics", width: 14, numFmt: RUB },
-      { header: "Себестоимость, ₽ (впишите)", key: "cost", width: 14, numFmt: RUB },
+      { header: "Продано (финотчёт), шт", key: "soldUnits", width: 11, numFmt: INT },
+      { header: "Средняя цена, ₽", key: "avgPrice", width: 12, numFmt: RUB },
+      { header: "Логистика на штуку, ₽", key: "logisticsPerUnit", width: 12, numFmt: RUB },
+      { header: "Себестоимость, ₽", key: "cost", width: 13, numFmt: RUB },
+      { header: "Прибыль до рекламы, ₽", key: "profit", width: 14, numFmt: RUB },
+      { header: "Прибыль на штуку, ₽", key: "profitPerUnit", width: 12, numFmt: RUB },
+      { header: "Маржа, %", key: "margin", width: 9, numFmt: PCT },
+      { header: "Минимальная цена, ₽", key: "minPrice", width: 12, numFmt: RUB },
       { header: "Фото", key: "photos", width: 6 },
       { header: "Видео", key: "video", width: 7 },
       { header: "Описание, симв.", key: "descriptionLength", width: 10, numFmt: INT },
       { header: "Характеристик", key: "characteristics", width: 10 },
     ],
-    r.products.map((p) => ({ ...p, video: p.video === null ? null : p.video ? "да" : "нет", cost: null })),
+    r.products.map((p) => ({ ...p, video: p.video === null ? null : p.video ? "да" : "нет" })),
   );
 
   if (d.abc.ok) {
@@ -126,6 +133,12 @@ export async function renderXlsx(r: AuditReport, file: string): Promise<void> {
       ["Доплаты от WB", t.additionalPayments],
       ["На руки (оценка, до себестоимости, налогов и рекламы)", t.netPayoutEstimate],
     ];
+    const e = r.economics;
+    if (e) {
+      if (e.ads !== null) lines.push(["Реклама", -e.ads]);
+      if (e.costOfGoods !== null) lines.push(["Себестоимость проданного", -e.costOfGoods], ["Налог", -(e.tax ?? 0)]);
+      lines.push([e.profit !== null ? `Прибыль${e.costCoverage < 100 ? ` (себестоимость есть для ${e.costCoverage}% выручки)` : ""}` : "После WB и рекламы (себестоимость не вписана)", e.profit ?? e.afterWbAndAds]);
+    }
     for (const [a, b] of lines) ws.addRow([a, b]).getCell(2).numFmt = RUB;
     ws.getRow(ws.rowCount).font = { bold: true };
   }

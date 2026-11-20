@@ -9,6 +9,7 @@
  * жалобы в отзывах, дорогая реклама.
  */
 import { HOSTS, type WBClient } from "../mcp/wb/src/client.js";
+import type { CostRow } from "./cost.js";
 
 type Row = Record<string, unknown>;
 
@@ -80,6 +81,19 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
   P(201450023, "FRAME-PHOTO-A4", "Рамка для фото А4", "Рамки", 390, 0, { stock: 140 }), // мёртвый остаток
   P(201450024, "BASKET-JUTE", "Корзина джутовая 30 см", "Корзины", 990, 0.3),
 ];
+
+/**
+ * Себестоимость демо-магазина (как будто продавец заполнил data/cost.csv).
+ * Тапочки и органайзер заложены убыточными, у двух мелких товаров цена не вписана —
+ * отчёт должен честно сказать, что по ним прибыль не посчитана.
+ */
+export const DEMO_COSTS: CostRow[] = DEMO_PRODUCTS.filter((p) => !["HOOKS-SET-10", "BASKET-JUTE"].includes(p.vendorCode)).map((p) => ({
+  nmId: p.nmId,
+  vendorCode: p.vendorCode,
+  title: p.title,
+  cost: ({ "SLIPPERS-38-39": 430, "ORGANIZER-6": 190, "BATHROBE-M": 1150 } as Record<string, number>)[p.vendorCode] ?? Math.round(p.price * 0.3),
+  taxPercent: 6,
+}));
 
 const COMPLAINTS: Record<string, string[]> = {
   размер: [

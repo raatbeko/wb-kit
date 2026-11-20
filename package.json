@@ -17,7 +17,8 @@
     "typecheck": "tsc --noEmit",
     "competitors": "tsx scripts/competitors.ts",
     "card": "tsx scripts/card.ts",
-    "office": "tsx scripts/office.ts"
+    "office": "tsx scripts/office.ts",
+    "cost": "tsx scripts/cost.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",

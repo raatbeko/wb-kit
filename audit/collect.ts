@@ -13,6 +13,7 @@ import {
   summarizeFinance,
 } from "../mcp/wb/src/tools.js";
 import { previousPeriod, num, round2, toUnix } from "../mcp/wb/src/util.js";
+import type { CostRow } from "./cost.js";
 
 type Row = Record<string, unknown>;
 
@@ -101,6 +102,8 @@ export interface AuditData {
   feedbacks: Section<{ unansweredFeedbacks: number; unansweredQuestions: number; list: FeedbackRow[] }>;
   ads: Section<{ total: number; campaigns: { advertId: number; campName: string; spent: number }[] }>;
   cards: Section<{ list: CardRow[] }>;
+  /** Себестоимость из data/cost.csv. Нет файла — null; в старых data.json поля нет. */
+  costs?: CostRow[] | null;
 }
 
 /** Имена категорий ключа для понятной причины «нет доступа». */
@@ -176,6 +179,35 @@ export interface CollectOptions {
   now?: Date;
   demo?: boolean;
   log?: (m: string) => void;
+  costs?: CostRow[] | null;
+}
+
+/** Все карточки продавца (контент). Нужны аудиту и заготовке data/cost.csv. */
+export async function fetchCards(client: WBClient): Promise<CardRow[]> {
+  const list: CardRow[] = [];
+  let cursor: Row = { limit: 100 };
+  for (let page = 0; page < 50; page++) {
+    const res = await client.post<{ cards?: Row[]; cursor?: Row }>(HOSTS.content, "/content/v2/get/cards/list", {
+      settings: { cursor, filter: { withPhoto: -1 } },
+    });
+    const cards = res?.cards ?? [];
+    for (const c of cards) {
+      list.push({
+        nmId: num(c["nmID"]),
+        vendorCode: String(c["vendorCode"] ?? ""),
+        title: String(c["title"] ?? ""),
+        subject: String(c["subjectName"] ?? ""),
+        photos: Array.isArray(c["photos"]) ? (c["photos"] as unknown[]).length : 0,
+        video: Boolean(c["video"]),
+        descriptionLength: String(c["description"] ?? "").length,
+        characteristics: Array.isArray(c["characteristics"]) ? (c["characteristics"] as unknown[]).length : 0,
+      });
+    }
+    // По Swagger: страницы кончились, когда total меньше limit.
+    if (cards.length < 100 || num(res?.cursor?.["total"]) < 100) break;
+    cursor = { limit: 100, updatedAt: res?.cursor?.["updatedAt"], nmID: res?.cursor?.["nmID"] };
+  }
+  return list;
 }
 
 export async function collectAudit(client: WBClient, opts: CollectOptions = {}): Promise<AuditData> {
@@ -335,30 +367,7 @@ export async function collectAudit(client: WBClient, opts: CollectOptions = {}):
 
   const cardsP = section("Карточки товаров", log, async () => {
     log("… Контент: карточки");
-    const list: CardRow[] = [];
-    let cursor: Row = { limit: 100 };
-    for (let page = 0; page < 50; page++) {
-      const res = await client.post<{ cards?: Row[]; cursor?: Row }>(HOSTS.content, "/content/v2/get/cards/list", {
-        settings: { cursor, filter: { withPhoto: -1 } },
-      });
-      const cards = res?.cards ?? [];
-      for (const c of cards) {
-        list.push({
-          nmId: num(c["nmID"]),
-          vendorCode: String(c["vendorCode"] ?? ""),
-          title: String(c["title"] ?? ""),
-          subject: String(c["subjectName"] ?? ""),
-          photos: Array.isArray(c["photos"]) ? (c["photos"] as unknown[]).length : 0,
-          video: Boolean(c["video"]),
-          descriptionLength: String(c["description"] ?? "").length,
-          characteristics: Array.isArray(c["characteristics"]) ? (c["characteristics"] as unknown[]).length : 0,
-        });
-      }
-      // По Swagger: страницы кончились, когда total меньше limit.
-      if (cards.length < 100 || num(res?.cursor?.["total"]) < 100) break;
-      cursor = { limit: 100, updatedAt: res?.cursor?.["updatedAt"], nmID: res?.cursor?.["nmID"] };
-    }
-    return { list };
+    return { list: await fetchCards(client) };
   });
 
   const sellerP = section("Продавец", log, async () => {
@@ -393,5 +402,6 @@ export async function collectAudit(client: WBClient, opts: CollectOptions = {}):
     feedbacks,
     ads,
     cards,
+    costs: opts.costs ?? null,
   };
 }

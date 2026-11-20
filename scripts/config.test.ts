@@ -34,8 +34,8 @@ describe(".claude/settings.json", () => {
 
 describe("set-key", () => {
   it("заменяет существующую строку и не трогает остальные", () => {
-    const before = "# комментарий\nWB_API_TOKEN=\nMPSTATS_TOKEN=old\n";
-    expect(setKey(before, "MPSTATS_TOKEN", "new")).toBe("# комментарий\nWB_API_TOKEN=\nMPSTATS_TOKEN=new\n");
+    const before = "# комментарий\nWB_API_TOKEN=\nTELEGRAM_BOT_TOKEN=old\n";
+    expect(setKey(before, "TELEGRAM_BOT_TOKEN", "new")).toBe("# комментарий\nWB_API_TOKEN=\nTELEGRAM_BOT_TOKEN=new\n");
   });
   it("добавляет строку, если её не было", () => {
     expect(setKey("A=1\n", "WB_API_TOKEN", "x.y.z")).toBe("A=1\nWB_API_TOKEN=x.y.z\n");
@@ -63,7 +63,8 @@ describe("офис агентов (.claude/agents)", () => {
   const agents = readdirSync(dir)
     .filter((f) => f.endsWith(".md"))
     .map((f) => {
-      const text = readFileSync(join(dir, f), "utf8");
+      // Git на Windows отдаёт файлы с CRLF — разбираем как обычные переносы.
+      const text = readFileSync(join(dir, f), "utf8").replace(/\r\n/g, "\n");
       const fm = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? "";
       const field = (k: string) => new RegExp(`^${k}: (.*)$`, "m").exec(fm)?.[1]?.trim();
       const list = (k: string) => (field(k) ?? "").split(",").map((x) => x.trim()).filter(Boolean);

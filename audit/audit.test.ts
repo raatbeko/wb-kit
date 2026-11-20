@@ -5,6 +5,8 @@ import { join } from "node:path";
 import ExcelJS from "exceljs";
 import { createDemoClient } from "./demo.js";
 import { collectAudit, weekStart, weeklySeries, explainFailure, type AuditData } from "./collect.js";
+import { DEMO_COSTS } from "./demo.js";
+import { parseCostCsv, serializeCostCsv, mergeCostRows } from "./cost.js";
 import { buildReport, summaryForClaude, median, type AuditReport } from "./analyze.js";
 import { renderHtml, markdownToHtml } from "./render-html.js";
 import { renderXlsx } from "./render-xlsx.js";
@@ -17,7 +19,7 @@ let data: AuditData;
 let report: AuditReport;
 
 beforeAll(async () => {
-  data = await collectAudit(createDemoClient(NOW), { now: NOW, demo: true });
+  data = await collectAudit(createDemoClient(NOW), { now: NOW, demo: true, costs: DEMO_COSTS });
   report = buildReport(data);
 });
 
@@ -39,6 +41,7 @@ describe("аудит на демо-магазине", () => {
     expect(byId["weak_cards"]).toEqual(expect.arrayContaining(["MUG-CERAMIC-400", "APRON-COTTON"]));
     expect(byId["sales_drop"]).toContain("BLANKET-KIDS");
     expect(Object.keys(byId)).toContain("high_drr");
+    expect(byId["unprofitable"]).toEqual(expect.arrayContaining(["SLIPPERS-38-39", "ORGANIZER-6"]));
   });
 
   it("срочные проблемы идут первыми", () => {
@@ -150,6 +153,70 @@ describe("окончания", async () => {
   it("1 отзыв, 2 отзыва, 5 отзывов, 11 отзывов, 21 отзыв", () => {
     expect([1, 2, 5, 11, 21, 104].map((n) => plural(n, "отзыв", "отзыва", "отзывов"))).toEqual([
       "1 отзыв", "2 отзыва", "5 отзывов", "11 отзывов", "21 отзыв", "104 отзыва",
+    ]);
+  });
+});
+
+describe("деньги: прибыль, ДРР, себестоимость", () => {
+  it("прибыль магазина сходится: на руки − реклама − себестоимость − налог", () => {
+    const e = report.economics!;
+    expect(e.profit).toBeCloseTo(e.payout - e.ads! - e.costOfGoods! - e.tax!, 0);
+    expect(e.breakEvenIsUpperBound).toBe(false);
+    expect(e.missingCost).toBe(2); // у двух демо-товаров себестоимость не вписана
+  });
+
+  it("ДРР считается к выкупам, а не к заказам", () => {
+    const e = report.economics!;
+    const s = data.sales.ok ? data.sales.data.current.totals : null;
+    expect(e.drrBuyouts).toBeCloseTo((e.ads! / s!.buyoutsSum) * 100, 1);
+    expect(e.drrBuyouts!).toBeGreaterThan((e.ads! / s!.ordersSum) * 100);
+  });
+
+  it("минимальная цена убыточного товара выше текущей", () => {
+    const slippers = report.products.find((p) => p.vendorCode === "SLIPPERS-38-39")!;
+    expect(slippers.profit!).toBeLessThan(0);
+    expect(slippers.minPrice!).toBeGreaterThan(slippers.avgPrice!);
+  });
+
+  it("без себестоимости прибыль не выдумывается, а отчёт просит её вписать", () => {
+    const r = buildReport({ ...data, costs: null });
+    expect(r.economics!.profit).toBeNull();
+    expect(r.economics!.breakEvenIsUpperBound).toBe(true);
+    expect(r.issues.map((i) => i.id)).toContain("no_costs");
+    expect(r.issues.map((i) => i.id)).not.toContain("unprofitable");
+    expect(r.kpis.find((k) => k.tier === 1)!.key).toBe("afterWbAndAds");
+    expect(renderHtml(r)).toContain("После WB и рекламы");
+  });
+
+  it("пустой отчёт об остатках (FBS) не объявляет все товары закончившимися", () => {
+    const fbs = structuredClone(data);
+    if (fbs.stocks.ok) fbs.stocks.data = { products: [], total: 0 };
+    const r = buildReport(fbs);
+    expect(r.issues.map((i) => i.id)).not.toContain("out_of_stock");
+  });
+});
+
+describe("data/cost.csv", () => {
+  it("читает файл из русского Excel: BOM, «;», запятая в дробях, ₽, кавычки", () => {
+    const rows = parseCostCsv('﻿Артикул WB;Артикул продавца;Название;Себестоимость, ₽;Налог, %\r\n101;A-1;"Плед; серый";450,5 ₽;6\r\n102;A-2;Кружка;;\r\n');
+    expect(rows).toEqual([
+      { nmId: 101, vendorCode: "A-1", title: "Плед; серый", cost: 450.5, taxPercent: 6 },
+      { nmId: 102, vendorCode: "A-2", title: "Кружка", cost: null, taxPercent: null },
+    ]);
+  });
+  it("запись и чтение обратно дают то же самое", () => {
+    const rows = [{ nmId: 1, vendorCode: "X;1", title: "Т \"кавычки\"", cost: 12.5, taxPercent: 6 }];
+    expect(parseCostCsv(serializeCostCsv(rows))).toEqual(rows);
+  });
+  it("дописывает только новые товары и не трогает вписанные цифры", () => {
+    const { rows, added } = mergeCostRows([{ nmId: 1, vendorCode: "A", title: "a", cost: 100, taxPercent: 6 }], [
+      { nmId: 1, vendorCode: "A", title: "a" },
+      { nmId: 2, vendorCode: "B", title: "b" },
+    ]);
+    expect(added).toBe(1);
+    expect(rows).toEqual([
+      { nmId: 1, vendorCode: "A", title: "a", cost: 100, taxPercent: 6 },
+      { nmId: 2, vendorCode: "B", title: "b", cost: null, taxPercent: 6 },
     ]);
   });
 });

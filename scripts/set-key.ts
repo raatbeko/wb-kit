@@ -9,7 +9,7 @@ import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ENV_PATH, ROOT } from "../mcp/wb/src/env.js";
 
-export const ALLOWED_KEYS = ["WB_API_TOKEN", "MPSTATS_TOKEN", "ANTHROPIC_API_KEY", "TELEGRAM_BOT_TOKEN"] as const;
+export const ALLOWED_KEYS = ["WB_API_TOKEN", "ANTHROPIC_API_KEY", "TELEGRAM_BOT_TOKEN"] as const;
 
 export function setKey(content: string, name: string, value: string): string {
   const line = `${name}=${value}`;

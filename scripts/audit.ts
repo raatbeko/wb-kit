@@ -14,7 +14,8 @@ import { join, relative, resolve } from "node:path";
 import { WBClient } from "../mcp/wb/src/client.js";
 import { ROOT, loadEnv, readKey } from "../mcp/wb/src/env.js";
 import { collectAudit, type AuditData } from "../audit/collect.js";
-import { createDemoClient } from "../audit/demo.js";
+import { createDemoClient, DEMO_COSTS } from "../audit/demo.js";
+import { loadCosts } from "../audit/cost.js";
 import { buildReport, summaryForClaude } from "../audit/analyze.js";
 import { renderHtml } from "../audit/render-html.js";
 import { renderXlsx } from "../audit/render-xlsx.js";
@@ -31,6 +32,8 @@ export function reportNames(d: AuditData) {
 }
 
 async function render(dir: string, d: AuditData) {
+  // Себестоимость могли вписать уже после сбора — при пересборке берём свежий файл.
+  if (!d.demo) d.costs = loadCosts() ?? d.costs ?? null;
   const report = buildReport(d);
   const insightsPath = join(dir, "insights.md");
   const insights = existsSync(insightsPath) ? readFileSync(insightsPath, "utf8") : undefined;
@@ -49,6 +52,8 @@ async function render(dir: string, d: AuditData) {
   console.log(`  Excel:   ${rel(names.xlsx)}`);
   console.log(`  выжимка: ${rel("summary.json")}`);
   console.log(`\nНайдено проблем: ${report.issues.length} (срочных: ${report.issues.filter((i) => i.priority === "high").length}).`);
+  const e = report.economics;
+  if (e && e.costCoverage < 100) console.log(`Себестоимость есть для ${e.costCoverage}% выручки. Без неё прибыль не посчитать — заполните data/cost.csv (npm run cost -- --init).`);
   if (report.unavailable.length) console.log(`Нет в отчёте: ${report.unavailable.map((u) => `${u.section} (${u.reason})`).join("; ")}`);
 }
 
@@ -81,7 +86,7 @@ async function main() {
   }
 
   console.error(`Собираю данные за ${days} дней${demo ? " (демо-магазин)" : ""}. С настоящим ключом это 1–3 минуты: WB отдаёт отчёты не чаще раза в минуту.`);
-  const data = await collectAudit(client, { days, demo, log: (m) => console.error(m) });
+  const data = await collectAudit(client, { days, demo, costs: demo ? DEMO_COSTS : loadCosts(), log: (m) => console.error(m) });
   const dir = join(ROOT, "reports", `audit-${data.generatedAt.slice(0, 10)}${demo ? "-demo" : ""}`);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "data.json"), JSON.stringify(data));
