@@ -18,7 +18,7 @@ function sheet(wb: ExcelJS.Workbook, name: string, cols: Col[], rows: Record<str
   for (const r of rows) ws.addRow(r);
   const head = ws.getRow(1);
   head.font = { bold: true };
-  head.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEDE7F6" } };
+  head.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFEEEA" } };
   head.alignment = { vertical: "middle", wrapText: true };
   if (rows.length) ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: cols.length } };
   return ws;
@@ -141,6 +141,40 @@ export async function renderXlsx(r: AuditReport, file: string): Promise<void> {
     }
     for (const [a, b] of lines) ws.addRow([a, b]).getCell(2).numFmt = RUB;
     ws.getRow(ws.rowCount).font = { bold: true };
+  }
+
+  if (r.months.some((m) => !m.unavailable)) {
+    const days = (m: (typeof r.months)[number]) => Math.round((Date.parse(m.to) - Date.parse(m.from)) / 86_400_000) + 1;
+    sheet(wb, "По месяцам", [
+      { header: "Месяц", key: "label", width: 22 },
+      { header: "Период", key: "period", width: 24 },
+      { header: "Выручка", key: "revenue", width: 14, numFmt: RUB },
+      { header: "Продано, шт", key: "soldUnits", width: 12 },
+      { header: "На руки по финотчёту", key: "payout", width: 16, numFmt: RUB },
+      { header: "Реклама", key: "ads", width: 14, numFmt: RUB },
+      { header: "Себестоимость", key: "costOfGoods", width: 15, numFmt: RUB },
+      { header: "Налог", key: "tax", width: 12, numFmt: RUB },
+      { header: "Прибыль (или после WB и рекламы)", key: "result", width: 18, numFmt: RUB },
+      { header: "Маржа", key: "margin", width: 9, numFmt: PCT },
+      { header: "В день", key: "perDay", width: 12, numFmt: RUB },
+      { header: "Примечание", key: "note", width: 50 },
+    ], r.months.map((m) => {
+      const result = m.unavailable ? null : (m.profit ?? m.afterWbAndAds);
+      return {
+        label: m.label,
+        period: `${m.from} — ${m.to}`,
+        revenue: m.unavailable ? null : m.revenue,
+        soldUnits: m.unavailable ? null : m.soldUnits,
+        payout: m.unavailable ? null : m.payout,
+        ads: m.ads,
+        costOfGoods: m.costOfGoods,
+        tax: m.tax,
+        result,
+        margin: m.margin,
+        perDay: result === null ? null : Math.round(result / days(m)),
+        note: m.unavailable ? `нет данных: ${m.unavailable}` : [m.partial ? "месяц ещё идёт" : "", m.profit === null ? "себестоимость не вписана — до себестоимости" : m.costCoverage < 100 ? `себестоимость есть для ${m.costCoverage}% выручки` : ""].filter(Boolean).join("; "),
+      };
+    }));
   }
 
   if (d.feedbacks.ok) {

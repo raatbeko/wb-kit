@@ -4,6 +4,7 @@
  *   npm run audit                      — собрать данные по ключу из .env и сделать отчёт
  *   npm run audit -- --demo            — то же на выдуманном магазине, без ключа
  *   npm run audit -- --days 14         — другой период (по умолчанию 30 дней)
+ *   npm run audit -- --months 6        — раздел «По месяцам» за 6 месяцев (по умолчанию 3, до 12)
  *   npm run audit -- --render <папка>  — пересобрать отчёт из data.json, добавив insights.md
  *
  * Результат — папка reports/audit-ГГГГ-ММ-ДД: HTML-отчёт, Excel, data.json (все
@@ -70,6 +71,8 @@ async function main() {
   const demo = process.argv.includes("--demo");
   const days = Number(arg("--days") ?? 30);
   if (!Number.isInteger(days) || days < 7 || days > 60) throw new Error("--days: от 7 до 60 (статистика WB хранится 90 дней, нужен ещё прошлый период для сравнения)");
+  const months = Number(arg("--months") ?? 3);
+  if (!Number.isInteger(months) || months < 0 || months > 12) throw new Error("--months: от 0 до 12 (каждый месяц — ещё минута: финансы WB отдают 1 запрос в минуту)");
 
   let client;
   if (demo) {
@@ -85,8 +88,8 @@ async function main() {
     client = new WBClient({ token });
   }
 
-  console.error(`Собираю данные за ${days} дней${demo ? " (демо-магазин)" : ""}. С настоящим ключом это 1–3 минуты: WB отдаёт отчёты не чаще раза в минуту.`);
-  const data = await collectAudit(client, { days, demo, costs: demo ? DEMO_COSTS : loadCosts(), log: (m) => console.error(m) });
+  console.error(`Собираю данные за ${days} дней${months ? ` и деньги по месяцам за ${months} мес.` : ""}${demo ? " (демо-магазин)" : ""}. С настоящим ключом это ${2 + Math.ceil(months / 2)}–${3 + months} мин: WB отдаёт финансовые отчёты не чаще раза в минуту.`);
+  const data = await collectAudit(client, { days, months, demo, costs: demo ? DEMO_COSTS : loadCosts(), log: (m) => console.error(m) });
   const dir = join(ROOT, "reports", `audit-${data.generatedAt.slice(0, 10)}${demo ? "-demo" : ""}`);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "data.json"), JSON.stringify(data));

@@ -15,6 +15,7 @@ MCP-сервер `wb` (код в `mcp/wb/`) — 44 инструмента к API
 - Себестоимость — файл `data/cost.csv` (артикул, себестоимость штуки, налог %). В API WB её нет. Без неё не называй сумму «прибылью»: это «после WB и рекламы, до себестоимости». Создать файл: `npm run cost -- --init`; человек может продиктовать цифры — впиши их в файл сам.
 - ДРР считай к выкупам, а не к заказам: заказ без выкупа денег не приносит.
 - Деньги — `get_finance_summary`. Отчёт WB формируется раз в неделю, последние дни могут отсутствовать: предупреждай об этом.
+- По месяцам — раздел аудита «По месяцам» (3 месяца, `npm run audit -- --months N` — до 12). На вопрос «сколько заработал в таком-то месяце» хватит `get_finance_summary` и `get_ad_costs` за этот месяц.
 - Воронка — `get_funnel` (до 365 дней), остатки — `get_wb_stocks`, реклама — `get_ad_costs` и `get_campaign_stats`.
 
 **Лимиты WB строгие.** Статистика и финансы — 1 запрос в минуту, аналитика — 3 в минуту. Сервер сам ждёт, но:
@@ -60,7 +61,7 @@ MPSTATS подключается отдельным MCP-сервером (луч
 ## Для разработчика набора
 
 - `npm test` — тесты (маршруты инструментов сверены со Swagger WB, расчёты, конфигурация, аудит на демо-магазине).
-- Аудит: `audit/collect.ts` (сбор, разделы независимы), `analyze.ts` (деньги `buildEconomics`, проблемы и пороги `THRESHOLDS`), `cost.ts` (себестоимость из `data/cost.csv`, CLI — `scripts/cost.ts`), `render-html.ts`, `render-xlsx.ts`, `demo.ts` (выдуманный магазин, подменяет API WB целиком). CLI — `scripts/audit.ts`.
+- Аудит: `audit/collect.ts` (сбор, разделы независимы; месяцы — `monthRanges`), `analyze.ts` (деньги `buildEconomics`, по месяцам `buildMonths`, проблемы и пороги `THRESHOLDS`), `cost.ts` (себестоимость из `data/cost.csv`, CLI — `scripts/cost.ts`), `render-html.ts`, `render-xlsx.ts`, `demo.ts` (выдуманный магазин, подменяет API WB целиком). CLI — `scripts/audit.ts`.
 - Конкуренты: `competitors/extract-search.js` (выполняется на странице поиска), `analyze.ts` (пороги `CT`), `cdn.ts` (описания карточек с публичного CDN, честный User-Agent, таблица серверов `ANCHORS` — дополнять, если новые артикулы не находятся), `render.ts`, `demo.ts`. CLI — `scripts/competitors.ts`, история — `data/competitors/history.jsonl`.
 - Карточка: `card/text.ts` (слова и основы без словарей), `collect.ts` (своя карточка, `search-texts`, конкуренты из истории `/competitors` или `--competitors`), `analyze.ts` (покрытие спроса, разбор `proposal.md`, лимиты `LIMITS`), `render.ts`, `demo.ts`. CLI — `scripts/card.ts`.
 - Офис: роли — `.claude/agents/*.md` (у каждой `tools: … mcp__wb__*` и `disallowedTools` со всеми инструментами записи — тест это проверяет), директор — `.claude/commands/office.md`, сборка отчёта — `scripts/office.ts`. Те же файлы ролей потом загружает бот (Agent SDK, источник настроек `project`).

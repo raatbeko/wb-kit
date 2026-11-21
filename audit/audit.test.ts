@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import ExcelJS from "exceljs";
 import { createDemoClient } from "./demo.js";
-import { collectAudit, weekStart, weeklySeries, explainFailure, type AuditData } from "./collect.js";
+import { collectAudit, weekStart, weeklySeries, explainFailure, monthRanges, type AuditData } from "./collect.js";
 import { DEMO_COSTS } from "./demo.js";
 import { parseCostCsv, serializeCostCsv, mergeCostRows } from "./cost.js";
 import { buildReport, summaryForClaude, median, type AuditReport } from "./analyze.js";
@@ -121,7 +121,7 @@ describe("Excel", () => {
     expect(existsSync(file)).toBe(true);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.readFile(file);
-    expect(wb.worksheets.map((w) => w.name)).toEqual(["Сводка", "Товары", "ABC", "Деньги", "Негативные отзывы", "Реклама"]);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(["Сводка", "Товары", "ABC", "Деньги", "По месяцам", "Негативные отзывы", "Реклама"]);
     expect(wb.getWorksheet("Товары")!.rowCount).toBe(report.products.length + 1);
   });
 });
@@ -193,6 +193,45 @@ describe("деньги: прибыль, ДРР, себестоимость", () 
     if (fbs.stocks.ok) fbs.stocks.data = { products: [], total: 0 };
     const r = buildReport(fbs);
     expect(r.issues.map((i) => i.id)).not.toContain("out_of_stock");
+  });
+});
+
+describe("деньги по месяцам", () => {
+  it("три календарных месяца, последний — неполный, по вчера", () => {
+    expect(monthRanges("2026-11-17", 3)).toEqual([
+      { month: "2026-09", from: "2026-09-01", to: "2026-09-30", partial: false },
+      { month: "2026-10", from: "2026-10-01", to: "2026-10-31", partial: false },
+      { month: "2026-11", from: "2026-11-01", to: "2026-11-17", partial: true },
+    ]);
+    expect(monthRanges("2026-02-28", 2).map((m) => [m.month, m.to, m.partial])).toEqual([["2026-01", "2026-01-31", false], ["2026-02", "2026-02-28", false]]);
+    expect(monthRanges("2027-01-05", 2)[0]!.month).toBe("2026-12");
+  });
+
+  it("каждый месяц считается так же, как «Деньги»: на руки − реклама − себестоимость − налог", () => {
+    expect(report.months.map((m) => m.label)).toEqual(["Сентябрь 2026", "Октябрь 2026", "Ноябрь 2026"]);
+    for (const m of report.months) {
+      expect(m.unavailable).toBeNull();
+      expect(m.revenue).toBeGreaterThan(0);
+      expect(m.profit!).toBeCloseTo(m.payout - m.ads! - m.costOfGoods! - m.tax!, 0);
+    }
+    expect(report.months.at(-1)!.partial).toBe(true);
+  });
+
+  it("в HTML есть таблица по месяцам, без себестоимости — «после WB и рекламы»", () => {
+    const html = renderHtml(report);
+    expect(html).toContain("По месяцам");
+    expect(html).toContain("Октябрь 2026");
+    const noCost = renderHtml(buildReport({ ...data, costs: null }));
+    expect(noCost).toMatch(/class="months"[\s\S]*После WB и рекламы/);
+  });
+
+  it("старый data.json без месяцев и раздел без доступа не ломают отчёт", () => {
+    const old = buildReport({ ...data, months: undefined });
+    expect(old.months).toEqual([]);
+    expect(renderHtml(old)).not.toContain("По месяцам");
+    const denied = structuredClone(data);
+    denied.months![0] = { ...denied.months![0]!, finance: { ok: false, reason: "нет доступа" } };
+    expect(renderHtml(buildReport(denied))).toContain("нет данных: нет доступа");
   });
 });
 

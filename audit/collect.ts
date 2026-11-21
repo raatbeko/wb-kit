@@ -14,6 +14,7 @@ import {
 } from "../mcp/wb/src/tools.js";
 import { previousPeriod, num, round2, toUnix } from "../mcp/wb/src/util.js";
 import type { CostRow } from "./cost.js";
+import { monthLabel } from "./analyze.js";
 
 type Row = Record<string, unknown>;
 
@@ -104,6 +105,33 @@ export interface AuditData {
   cards: Section<{ list: CardRow[] }>;
   /** Себестоимость из data/cost.csv. Нет файла — null; в старых data.json поля нет. */
   costs?: CostRow[] | null;
+  /** Деньги по календарным месяцам (последний — неполный, до вчера). В старых data.json поля нет. */
+  months?: MonthData[];
+}
+
+export interface MonthData {
+  /** «2026-09» */
+  month: string;
+  from: string;
+  to: string;
+  /** Месяц ещё идёт: данные до вчера, финотчёт за последние дни может быть не готов. */
+  partial: boolean;
+  finance: Section<ReturnType<typeof summarizeFinance>>;
+  ads: Section<number>;
+}
+
+/** Календарные месяцы, последний — тот, в который попадает `to` (обрезан по `to`). */
+export function monthRanges(to: string, count: number): { month: string; from: string; to: string; partial: boolean }[] {
+  const [y, m] = to.split("-").map(Number) as [number, number];
+  const out: { month: string; from: string; to: string; partial: boolean }[] = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const first = new Date(Date.UTC(y, m - 1 - i, 1));
+    const last = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0));
+    const from = first.toISOString().slice(0, 10);
+    const end = last.toISOString().slice(0, 10);
+    out.push({ month: from.slice(0, 7), from, to: end < to ? end : to, partial: end > to });
+  }
+  return out;
 }
 
 /** Имена категорий ключа для понятной причины «нет доступа». */
@@ -180,6 +208,8 @@ export interface CollectOptions {
   demo?: boolean;
   log?: (m: string) => void;
   costs?: CostRow[] | null;
+  /** Сколько календарных месяцев показать в разделе «По месяцам» (0 — не собирать). */
+  months?: number;
 }
 
 /** Все карточки продавца (контент). Нужны аудиту и заготовке data/cost.csv. */
@@ -242,6 +272,26 @@ export async function collectAudit(client: WBClient, opts: CollectOptions = {}):
     log("… Финансы: отчёт о реализации (1 запрос в минуту)");
     return summarizeFinance(await fetchFinanceRows(client, from, to, "weekly"), 1000);
   });
+
+  // Помесячно — отдельным запросом на месяц: WB сам отбирает строки по датам, а
+  // финансы отдают 1 запрос в минуту, поэтому 3 месяца — это ещё ~3 минуты.
+  const monthsP = (async (): Promise<MonthData[]> => {
+    await financeP; // не толкаемся с основным отчётом в одной очереди
+    const out: MonthData[] = [];
+    for (const r of monthRanges(to, opts.months ?? 3)) {
+      const label = monthLabel(r.month).toLowerCase();
+      const finance = await section(`Деньги за ${label}`, log, async () => {
+        log(`… Финансы за ${label} (1 запрос в минуту)`);
+        return summarizeFinance(await fetchFinanceRows(client, r.from, r.to, "weekly"), 5000);
+      });
+      const ads = await section(`Реклама за ${label}`, log, async () => {
+        const part = await client.get<Row[]>(HOSTS.advert, "/adv/v1/upd", { from: r.from, to: r.to });
+        return round2((Array.isArray(part) ? part : []).reduce((s, x) => s + num(x["updSum"]), 0));
+      });
+      out.push({ ...r, finance, ads });
+    }
+    return out;
+  })();
 
   // Аналитика: воронка и остатки — один хост, идут по очереди.
   const analyticsP = (async () => {
@@ -384,7 +434,7 @@ export async function collectAudit(client: WBClient, opts: CollectOptions = {}):
     return { name: String(info?.["name"] ?? ""), tradeMark: String(info?.["tradeMark"] ?? ""), rating, feedbackCount };
   });
 
-  const [sales, finance, analytics, feedbacks, ads, cards, seller] = await Promise.all([salesP, financeP, analyticsP, feedbacksP, adsP, cardsP, sellerP]);
+  const [sales, finance, analytics, feedbacks, ads, cards, seller, months] = await Promise.all([salesP, financeP, analyticsP, feedbacksP, adsP, cardsP, sellerP, monthsP]);
   const abc: Section<ReturnType<typeof abcFromSales>> = sales.ok ? { ok: true, data: abcFromSales(sales.data.current.products) } : { ok: false, reason: sales.reason };
 
   return {
@@ -403,5 +453,6 @@ export async function collectAudit(client: WBClient, opts: CollectOptions = {}):
     ads,
     cards,
     costs: opts.costs ?? null,
+    months,
   };
 }

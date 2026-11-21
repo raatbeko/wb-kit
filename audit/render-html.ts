@@ -5,7 +5,7 @@
  * Порядок — как читает владелец магазина: сначала «зарабатываю ли я и куда уходят
  * деньги», потом что сделать (по срочности, с суммами), потом подробности.
  */
-import type { AuditReport, Economics, Issue, Kpi, ProductLine } from "./analyze.js";
+import type { AuditReport, Economics, Issue, Kpi, MonthLine, ProductLine } from "./analyze.js";
 import { THRESHOLDS } from "./analyze.js";
 import type { WeekPoint } from "./collect.js";
 
@@ -69,7 +69,8 @@ footer{color:var(--faint);font-size:13px;margin-top:28px;padding-top:16px;border
 `;
 
 /** Стили только аудита: итог периода, куда уходит выручка, задачи, таблицы денег и товаров. */
-const AUDIT_CSS = `.hero{display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
+const AUDIT_CSS = `.months td:first-child{white-space:nowrap;position:sticky;left:0;background:var(--card)}.months td.strong{font-weight:650}.months .neg{color:var(--bad)}.months tr.partial-row td{color:var(--muted)}.months tr.partial-row td.strong{color:inherit}
+.hero{display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
 .hero-top{display:flex;flex-wrap:wrap;gap:12px 40px;align-items:flex-end;justify-content:space-between}
 .hero-label{font-size:14px;color:var(--muted)}.hero-value{font-size:52px;line-height:1.05;font-weight:650;letter-spacing:-.02em;margin:4px 0 6px}
 .hero-value.bad{color:var(--bad)}.hero-text{margin:0;max-width:60ch}
@@ -341,6 +342,38 @@ function moneyTable(r: AuditReport): string {
   return `<div class="table-wrap"><table class="pl"><thead><tr><th>Статья</th><th class="r">Сумма</th><th class="r">Доля выручки</th></tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
+/** Деньги по календарным месяцам: строка — месяц. «В день» честно сравнивает неполный месяц с полными. */
+function monthsTable(months: MonthLine[]): string {
+  const ok = months.filter((m) => !m.unavailable);
+  if (!ok.length) return "";
+  const withProfit = ok.some((m) => m.profit !== null);
+  const days = (m: MonthLine) => Math.round((Date.parse(m.to) - Date.parse(m.from)) / 86_400_000) + 1;
+  const money = (v: number | null, bad = false) => (v === null ? "—" : `<span${bad && v < 0 ? ' class="neg"' : ""}>${v < 0 ? "−" : ""}${rub(Math.abs(v))}</span>`);
+  const head = `<tr><th>Месяц</th><th class="r">Выручка</th><th class="r">На руки</th><th class="r">Реклама</th>${
+    withProfit ? `<th class="r">Себестоимость и налог</th><th class="r">Прибыль</th><th class="r">Маржа</th><th class="r">Прибыль в день</th>` : `<th class="r">После WB и рекламы</th><th class="r">В день</th>`
+  }</tr>`;
+  const body = months
+    .map((m) => {
+      const name = `${esc(m.label)}${m.partial ? `<div class="small">идёт, по ${ruDate(m.to).slice(0, 5)}</div>` : ""}`;
+      if (m.unavailable) return `<tr><td>${name}</td><td colspan="${withProfit ? 7 : 5}" class="muted">нет данных: ${esc(m.unavailable)}</td></tr>`;
+      const result = m.profit ?? m.afterWbAndAds;
+      const perDay = Math.round(result / days(m));
+      const cells = withProfit
+        ? `<td class="r">${m.costOfGoods === null ? "—" : `−${rub((m.costOfGoods ?? 0) + (m.tax ?? 0))}`}</td><td class="r strong">${money(m.profit, true)}</td><td class="r">${m.margin === null ? "—" : `${m.margin < 0 ? "−" : ""}${fmt(Math.abs(m.margin), 1)}%`}</td><td class="r">${money(perDay, true)}</td>`
+        : `<td class="r strong">${money(m.afterWbAndAds, true)}</td><td class="r">${money(perDay, true)}</td>`;
+      return `<tr${m.partial ? ' class="partial-row"' : ""}><td>${name}</td><td class="r">${rub(m.revenue)}</td><td class="r">${money(m.payout, true)}</td><td class="r">${m.ads === null ? "—" : m.ads ? `−${rub(m.ads)}` : "0 ₽"}</td>${cells}</tr>`;
+    })
+    .join("");
+  const lowCoverage = withProfit && ok.some((m) => m.revenue > 0 && m.costCoverage < 100);
+  return `<div class="table-wrap"><table class="months"><thead>${head}</thead><tbody>${body}</tbody></table></div>
+<p class="note">${monthsNote(months)}${lowCoverage ? " У части товаров себестоимость не вписана — в таких месяцах прибыль завышена." : ""}</p>`;
+}
+
+function monthsNote(months: MonthLine[]): string {
+  const partial = months.find((m) => m.partial);
+  return `${partial ? `${partial.label} ещё идёт: в нём данные по вчерашний день, а финотчёт WB за последнюю неделю может ещё не прийти — сравнивайте месяцы по колонке «в день». ` : ""}Нужны другие месяцы — попросите Claude, например: «покажи деньги по месяцам за полгода».`;
+}
+
 function productsTable(products: ProductLine[], withProfit: boolean): string {
   const T = THRESHOLDS;
   // Класс ячейки одной строкой: два атрибута class браузер не складывает, а берёт первый.
@@ -402,6 +435,9 @@ export function renderHtml(r: AuditReport, insightsMd?: string): string {
     sections.push(`<section><h2>Деньги</h2><p class="lead">По отчёту о реализации WB за период. Отчёт формируется раз в неделю — последние дни могут ещё не попасть.</p>${moneyTable(r)}${
       r.economics && r.economics.costOfGoods === null ? `<p class="note">Себестоимость не вписана, поэтому прибыли здесь нет. Файл для неё создаёт команда <code>npm run cost -- --init</code> — или попросите Claude.</p>` : ""
     }</section>`);
+  }
+  if (r.months.some((m) => !m.unavailable)) {
+    sections.push(`<section><h2>По месяцам</h2><p class="lead">Сколько магазин заработал в каждом календарном месяце — тот же расчёт, что в «Деньгах».</p>${monthsTable(r.months)}</section>`);
   }
   if (r.products.length) {
     sections.push(`<section><h2>Товары</h2><p class="lead">Сначала то, что приносит больше заказов. Красным — то, что выходит за ориентиры.</p>${productsTable(r.products, withProfit)}<p class="note">Дней запаса — остаток на складах WB, делённый на средние заказы в день. ${

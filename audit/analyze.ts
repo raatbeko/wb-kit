@@ -144,11 +144,37 @@ export interface Kpi {
   tone?: "good" | "bad";
 }
 
+/** Деньги за календарный месяц — тот же расчёт, что в «Деньгах», только по месяцам. */
+export interface MonthLine {
+  month: string;
+  /** «Сентябрь 2026» */
+  label: string;
+  from: string;
+  to: string;
+  partial: boolean;
+  /** Почему строки нет: нет доступа к финансам и т. п. */
+  unavailable: string | null;
+  revenue: number;
+  soldUnits: number;
+  /** На руки по финотчёту: перечисление минус услуги WB. */
+  payout: number;
+  ads: number | null;
+  costOfGoods: number | null;
+  tax: number | null;
+  /** После WB, рекламы, себестоимости и налога. null — себестоимости нет. */
+  profit: number | null;
+  afterWbAndAds: number;
+  margin: number | null;
+  /** Доля выручки месяца, у которой вписана себестоимость, %. */
+  costCoverage: number;
+}
+
 export interface AuditReport {
   data: AuditData;
   kpis: Kpi[];
   products: ProductLine[];
   economics: Economics | null;
+  months: MonthLine[];
   issues: Issue[];
   unavailable: { section: string; reason: string }[];
   negativeFeedbacks: FeedbackRow[];
@@ -388,6 +414,52 @@ export function buildEconomics(d: AuditData, products: ProductLine[]): Economics
     turnoverDays: d.stocks.ok && buyoutsPerDay > 0 ? Math.round(d.stocks.data.total / buyoutsPerDay) : null,
     lostPerDay,
   };
+}
+
+const MONTH_NAMES = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+export const monthLabel = (m: string) => `${MONTH_NAMES[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
+
+export function buildMonths(d: AuditData): MonthLine[] {
+  const findCost = costLookup(d.costs);
+  const hasAnyCost = (d.costs ?? []).some((c) => c.cost !== null);
+  return (d.months ?? []).map((m) => {
+    const base = { month: m.month, label: monthLabel(m.month), from: m.from, to: m.to, partial: m.partial };
+    if (!m.finance.ok) {
+      return { ...base, unavailable: m.finance.reason, revenue: 0, soldUnits: 0, payout: 0, ads: null, costOfGoods: null, tax: null, profit: null, afterWbAndAds: 0, margin: null, costCoverage: 0 };
+    }
+    const t = m.finance.data.totals;
+    const revenue = round2(t.sales - t.returns);
+    const ads = m.ads.ok ? m.ads.data : null;
+    let cogs = 0;
+    let tax = 0;
+    let covered = 0;
+    let soldUnits = 0;
+    for (const p of m.finance.data.products) {
+      soldUnits += Math.max(0, p.salesCount);
+      const c = findCost(p.nmId, p.vendorCode);
+      const rev = p.sales - p.returns;
+      if (!c || rev <= 0) continue;
+      covered += rev;
+      cogs += c.cost! * Math.max(0, p.salesCount);
+      tax += ((c.taxPercent ?? 0) / 100) * rev;
+    }
+    const afterWbAndAds = round2(t.netPayoutEstimate - (ads ?? 0));
+    const profit = hasAnyCost && revenue > 0 ? round2(afterWbAndAds - cogs - tax) : null;
+    return {
+      ...base,
+      unavailable: null,
+      revenue,
+      soldUnits,
+      payout: t.netPayoutEstimate,
+      ads,
+      costOfGoods: hasAnyCost ? round2(cogs) : null,
+      tax: hasAnyCost ? round2(tax) : null,
+      profit,
+      afterWbAndAds,
+      margin: profit !== null && revenue > 0 ? round2((profit / revenue) * 100) : null,
+      costCoverage: revenue > 0 ? Math.round((covered / revenue) * 100) : 0,
+    };
+  });
 }
 
 export function buildKpis(d: AuditData, e: Economics | null): Kpi[] {
@@ -763,6 +835,7 @@ export function buildReport(d: AuditData): AuditReport {
     kpis: buildKpis(d, economics),
     products,
     economics,
+    months: buildMonths(d),
     issues: buildIssues(d, products, economics),
     unavailable,
     negativeFeedbacks: d.feedbacks.ok
@@ -782,6 +855,8 @@ export function summaryForClaude(r: AuditReport) {
     economics: r.economics,
     economicsNote:
       "profit — прибыль после WB, рекламы, себестоимости и налога; null — себестоимость не вписана (тогда говори «до себестоимости»). costCoverage < 100 — прибыль завышена. drrBuyouts — реклама к выкупам; breakEvenDrr — ДРР, при котором прибыль ноль (если breakEvenIsUpperBound — это лишь верхняя граница). Финотчёт недельный: последние дни периода могут не попасть.",
+    months: r.months.map(({ from: _f, to: _t, ...m }) => m),
+    monthsNote: "Деньги по календарным месяцам, тот же расчёт, что economics. partial — месяц ещё идёт (до вчера), а финотчёт за последние дни может не прийти: сравнивай его с прошлыми осторожно.",
     issues: r.issues.map((i) => ({ ...i, products: i.products.slice(0, 8), moreProducts: Math.max(0, i.products.length - 8) })),
     unavailable: r.unavailable,
     abc: r.data.abc.ok ? r.data.abc.data.summary : null,
