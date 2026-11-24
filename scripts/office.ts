@@ -9,6 +9,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 import { ROOT } from "../mcp/wb/src/env.js";
 import { BASE_CSS, esc, markdownToHtml } from "../audit/render-html.js";
+import { refreshPanel } from "../panel/build.js";
 
 /** Порядок и подписи ролей в отчёте. */
 export const ROLES: [file: string, title: string][] = [
@@ -62,6 +63,7 @@ function main() {
   const out = join(dir, `${["Офис", date, basename(dir).endsWith("-demo") ? "ДЕМО" : ""].filter(Boolean).join(" ")}.html`);
   writeFileSync(out, renderOfficeHtml(dir, files));
   console.log(`Готово: ${relative(ROOT, out)} (план: ${files["план"] ? "есть" : "нет"}, ролей: ${Object.keys(files).filter((f) => f !== "план").length})`);
+  refreshPanel(ROOT, basename(dir).endsWith("-demo"));
 }
 
 if (process.argv[1] && /office\.ts$/.test(process.argv[1])) {

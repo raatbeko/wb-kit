@@ -18,7 +18,8 @@
     "competitors": "tsx scripts/competitors.ts",
     "card": "tsx scripts/card.ts",
     "office": "tsx scripts/office.ts",
-    "cost": "tsx scripts/cost.ts"
+    "cost": "tsx scripts/cost.ts",
+    "panel": "tsx scripts/panel.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",

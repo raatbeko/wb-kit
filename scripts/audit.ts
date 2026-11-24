@@ -20,6 +20,7 @@ import { loadCosts } from "../audit/cost.js";
 import { buildReport, summaryForClaude } from "../audit/analyze.js";
 import { renderHtml } from "../audit/render-html.js";
 import { renderXlsx } from "../audit/render-xlsx.js";
+import { refreshPanel } from "../panel/build.js";
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name);
@@ -52,6 +53,7 @@ async function render(dir: string, d: AuditData) {
   console.log(`  отчёт:   ${rel(names.html)}`);
   console.log(`  Excel:   ${rel(names.xlsx)}`);
   console.log(`  выжимка: ${rel("summary.json")}`);
+  refreshPanel(ROOT, d.demo);
   console.log(`\nНайдено проблем: ${report.issues.length} (срочных: ${report.issues.filter((i) => i.priority === "high").length}).`);
   const e = report.economics;
   if (e && e.costCoverage < 100) console.log(`Себестоимость есть для ${e.costCoverage}% выручки. Без неё прибыль не посчитать — заполните data/cost.csv (npm run cost -- --init).`);

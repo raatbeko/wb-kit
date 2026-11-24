@@ -18,6 +18,7 @@ import { ROOT, loadEnv, readKey } from "../mcp/wb/src/env.js";
 import { buildCompetitorReport, competitorSummary, LEADERS, type CompetitorInput, type OwnProduct, type SalesData, type SearchCard, type SearchSnapshot } from "../competitors/analyze.js";
 import { CardFetcher, type CardDetails } from "../competitors/cdn.js";
 import { demoCompetitorInput } from "../competitors/demo.js";
+import { refreshPanel } from "../panel/build.js";
 import { renderCompetitorHtml, renderCompetitorXlsx } from "../competitors/render.js";
 
 const HISTORY = join(ROOT, "data", "competitors", "history.jsonl");
@@ -168,6 +169,7 @@ async function render(dir: string, input: CompetitorInput) {
   console.log(`  отчёт:   ${rel(`${base}.html`)}`);
   console.log(`  Excel:   ${rel(`${base}.xlsx`)}`);
   console.log(`  выжимка: ${rel("summary.json")}`);
+  refreshPanel(ROOT, input.demo);
   console.log(`\nЗапросов: ${report.queries.length}. Важного: ${report.findings.length} (срочного: ${report.findings.filter((f) => f.priority === "high").length}).`);
 }
 

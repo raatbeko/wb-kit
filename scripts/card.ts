@@ -17,6 +17,7 @@ import { ROOT, loadEnv, readKey } from "../mcp/wb/src/env.js";
 import { CardFetcher } from "../competitors/cdn.js";
 import { buildCardReport, cardSummary, type CardInput } from "../card/analyze.js";
 import { collectCard } from "../card/collect.js";
+import { refreshPanel } from "../panel/build.js";
 import { demoCardInput } from "../card/demo.js";
 import { renderCardHtml, renderCardXlsx } from "../card/render.js";
 import { readHistory } from "./competitors.js";
@@ -63,6 +64,7 @@ async function render(dir: string, input: CardInput) {
   console.log(`  отчёт:   ${rel(`${base}.html`)}`);
   console.log(`  Excel:   ${rel(`${base}.xlsx`)}`);
   console.log(`  выжимка: ${rel("summary.json")}`);
+  refreshPanel(ROOT, !!input.demo);
   const pct = (x: number) => `${Math.round(x * 100)}%`;
   if (input.searchTexts.length) {
     console.log(`\nСпрос в названии: ${pct(report.coverage.title)}${report.proposal ? ` → ${pct(report.proposal.coverage.title)}` : ""}; в карточке: ${pct(report.coverage.card)}${report.proposal ? ` → ${pct(report.proposal.coverage.card)}` : ""}.`);
