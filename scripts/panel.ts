@@ -31,6 +31,9 @@ function main() {
     sources.office && "офис",
     sources.competitors && "конкуренты",
     sources.cards.length && `карточки (${sources.cards.length})`,
+    sources.plan && "план закупки",
+    sources.niche && "ниша",
+    sources.digest && `сводка за ${sources.digest.day.slice(8, 10)}.${sources.digest.day.slice(5, 7)}`,
   ].filter(Boolean);
   console.log(`Готово: ${relative(ROOT, path)}`);
   console.log(have.length ? `В панели: ${have.join(", ")}.` : "Отчётов пока нет — панель пустая. Начните с /audit (или /audit демо).");

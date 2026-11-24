@@ -28,6 +28,8 @@ export const FEATURES: { name: string; needs: string[]; optional?: string[] }[] 
   { name: "Аудит: деньги (финотчёт, удержания WB)", needs: ["finance"] },
   { name: "Аудит: карточки товаров", needs: ["content"] },
   { name: "/card: тексты карточки под поисковые запросы", needs: ["content", "analytics"] },
+  { name: "/plan: план закупки по месяцам", needs: ["analytics"] },
+  { name: "Утренняя сводка: заказы и остатки", needs: ["statistics", "analytics"] },
   { name: "Аудит: цены и скидки", needs: ["prices"] },
   { name: "Отзывы и вопросы", needs: ["feedbacks"] },
   { name: "Реклама: расходы и статистика", needs: ["promotion"] },
@@ -108,6 +110,13 @@ async function main() {
   }
 
   // 4. Необязательные ключи
+  const tg = readKey("TELEGRAM_BOT_TOKEN"), tgChat = readKey("TELEGRAM_CHAT_ID");
+  checks.push({
+    name: "Сводка в Telegram",
+    status: tg && tgChat ? "ok" : "warn",
+    detail: tg && tgChat ? "бот и чат подключены" : tg ? "токен есть, чат не привязан" : "не настроена (необязательно)",
+    fix: tg && !tgChat ? "Откройте своего бота, нажмите «Start» и выполните npm run telegram." : undefined,
+  });
   checks.push({
     name: "Telegram-бот",
     status: readKey("ANTHROPIC_API_KEY") && readKey("TELEGRAM_BOT_TOKEN") ? "ok" : "warn",

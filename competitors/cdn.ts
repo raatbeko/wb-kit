@@ -61,6 +61,13 @@ export function cardUrl(nmId: number, basket: number): string {
   return `https://basket-${String(basket).padStart(2, "0")}.wbbasket.ru/vol${vol}/part${part}/${nmId}/info/ru/card.json`;
 }
 
+/** Фото товара с того же сервера: 1.webp — главное фото, c246x328 — размер превью в каталоге. */
+export function photoUrl(nmId: number, basket: number, n = 1, size: "c246x328" | "big" = "c246x328"): string {
+  const vol = Math.floor(nmId / 100_000);
+  const part = Math.floor(nmId / 1000);
+  return `https://basket-${String(basket).padStart(2, "0")}.wbbasket.ru/vol${vol}/part${part}/${nmId}/images/${size}/${n}.webp`;
+}
+
 export function parseCard(nmId: number, j: Record<string, unknown>): CardDetails {
   const media = (j["media"] ?? {}) as Record<string, unknown>;
   const options = Array.isArray(j["options"]) ? (j["options"] as unknown[]) : [];
@@ -132,6 +139,13 @@ export class CardFetcher {
   async get(nmId: number): Promise<CardDetails | null> {
     const j = await this.getRaw(nmId);
     return j ? parseCard(nmId, j) : null;
+  }
+
+  /** Номер сервера, на котором лежат карточка и фото (null — не нашли). */
+  async basket(nmId: number): Promise<number | null> {
+    const vol = Math.floor(nmId / 100_000);
+    if (this.volCache.has(vol)) return this.volCache.get(vol)!;
+    return (await this.getRaw(nmId)) ? this.volCache.get(vol)! : null;
   }
 
   /** card.json целиком — для разбора текста карточки (`/card`). */

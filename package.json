@@ -19,7 +19,11 @@
     "card": "tsx scripts/card.ts",
     "office": "tsx scripts/office.ts",
     "cost": "tsx scripts/cost.ts",
-    "panel": "tsx scripts/panel.ts"
+    "panel": "tsx scripts/panel.ts",
+    "digest": "tsx scripts/digest.ts",
+    "plan": "tsx scripts/plan.ts",
+    "niche": "tsx scripts/niche.ts",
+    "telegram": "tsx scripts/telegram.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.2",

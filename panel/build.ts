@@ -11,6 +11,7 @@ import { join } from "node:path";
 import type { AuditData } from "../audit/collect.js";
 import type { summaryForClaude } from "../audit/analyze.js";
 import { esc, markdownToHtml } from "../audit/render-html.js";
+import { latestDigest, type Digest } from "../digest/digest.js";
 
 type Summary = ReturnType<typeof summaryForClaude>;
 type Issue = Summary["issues"][number];
@@ -54,6 +55,12 @@ export interface PanelSources {
   office?: { dir: string; parts: DocPart[] };
   competitors?: { dir: string; summary?: { findings?: { priority: string; text: string; query?: string }[] }; html: string };
   cards: { dir: string; vendorCode: string; findings: string[]; html: string }[];
+  /** Последняя утренняя сводка (npm run digest). */
+  digest?: Digest;
+  /** План закупки (npm run plan). */
+  plan?: { dir: string; summary?: { urgent?: { vendorCode: string; toOrder: number; daysLeft: number | null }[]; totals?: { toOrder: number; money: number | null } }; html: string };
+  /** Ниша (/niche). */
+  niche?: { dir: string; summary?: { findings?: { priority: string; text: string }[] }; html: string };
 }
 
 // ── Поиск последних отчётов ──
@@ -140,6 +147,11 @@ export function findSources(root: string, demo: boolean): PanelSources {
     seen.add(vendorCode);
     src.cards.push({ dir, vendorCode, findings: s?.findings ?? [], html });
   }
+  src.digest = latestDigest(root, demo);
+  const pl = folders(reports, "plan", demo).find((f) => htmlIn(join(reports, f)));
+  if (pl) src.plan = { dir: join(reports, pl), summary: readJson(join(reports, pl, "summary.json")), html: htmlIn(join(reports, pl))! };
+  const ni = folders(reports, "niche", demo).find((f) => htmlIn(join(reports, f)));
+  if (ni) src.niche = { dir: join(reports, ni), summary: readJson(join(reports, ni, "summary.json")), html: htmlIn(join(reports, ni))! };
   return src;
 }
 
@@ -174,6 +186,8 @@ export function collectFindings(src: PanelSources): Finding[] {
   }
   for (const f of src.competitors?.summary?.findings ?? []) out.push({ who: "scout", lvl: lvl(f.priority), text: f.query ? `«${f.query}»: ${f.text}` : f.text });
   for (const c of src.cards) for (const t of c.findings.slice(0, 2)) out.push({ who: "content", lvl: "warn", text: `${c.vendorCode}: ${t}` });
+  for (const u of src.plan?.summary?.urgent ?? []) out.push({ who: "logist", lvl: "bad", text: `Заказать сегодня ${u.vendorCode}: ${u.toOrder.toLocaleString("ru-RU")} шт — ${u.daysLeft ? `остатка на ${u.daysLeft} дн.` : "уже закончился"}` });
+  for (const f of src.niche?.summary?.findings ?? []) out.push({ who: "scout", lvl: lvl(f.priority), text: `Ниша: ${f.text}` });
   const order = { bad: 0, warn: 1, ok: 2 };
   return out.sort((a, b) => order[a.lvl] - order[b.lvl]);
 }
@@ -294,6 +308,33 @@ function docList(group: string, items: { id: string; name: string; sub: string; 
 }
 
 // ── Страница ──
+
+/** «Сегодня»: утренняя сводка сверху обзора. Сводке больше двух дней — честно говорим, что она старая. */
+function todayBlock(g: Digest | undefined, D: Record<string, Drawer>): string {
+  if (!g) return "";
+  const role = Object.fromEntries(PANEL_ROLES.map((r) => [r.id, r]));
+  const age = Math.floor((Date.now() - Date.parse(g.generatedAt)) / 86_400_000);
+  const h = g.headline;
+  const head = h
+    ? `Вчера ${h.orders} ${plural(h.orders, "заказ", "заказа", "заказов")} на ${short(h.sum)} ₽${h.vsAvgPct === null ? "" : h.vsAvgPct === 0 ? ", как в среднем за неделю" : `, на ${Math.abs(h.vsAvgPct)}% ${h.vsAvgPct > 0 ? "выше" : "ниже"} среднего за неделю`}.`
+    : "Заказов в сводке нет — " + esc(g.unavailable.find((u) => u.section === "Заказы")?.reason ?? "нет данных") + ".";
+  g.todo.forEach((t, i) => {
+    const r = role[t.who];
+    D["dg-" + i] = { title: r?.title ?? "Сводка", sub: `сводка за ${ruD(g.day)}`, text: t.text, go: ["audit"], goLabel: "Открыть аудит", ask: `Из утренней сводки: «${t.text}» Что сделать по шагам? Если нужно менять кабинет — покажи «было → станет».` };
+  });
+  const li = (lvl: string, a: string, b: string) => `<li><span class="dot ${lvl}"></span><b>${esc(a)}</b> <i>— ${esc(b)}</i></li>`;
+  const col = (title: string, items: string[]) => (items.length ? `<div><h3>${title}</h3><ul>${items.join("")}</ul></div>` : "");
+  const stock = [...g.gone.map((x) => li("bad", x.vendorCode, "закончился, " + x.text)), ...g.runout.map((x) => li(x.daysLeft <= 3 ? "bad" : "warn", x.vendorCode, x.text))];
+  const sales = [...g.drops.slice(0, 3).map((x) => li("warn", x.vendorCode, x.text)), ...g.growth.slice(0, 2).map((x) => li("ok", x.vendorCode, x.text))];
+  const rv = g.reviews;
+  const reviews = rv && (rv.feedbacks || rv.questions) ? [`<li>${rv.feedbacks} ${plural(rv.feedbacks, "отзыв", "отзыва", "отзывов")} и ${rv.questions} ${plural(rv.questions, "вопрос", "вопроса", "вопросов")} без ответа${rv.negative ? `, негативных — <b>${rv.negative}</b>` : ""}</li>`, ...rv.examples.map((x) => `<li><i>${esc(x)}</i></li>`)] : [];
+  const todo = g.todo.length
+    ? `<div><h3>Сделать сегодня</h3><ol class="plan">${g.todo.map((t, i) => `<li class="cl" data-d="dg-${i}" tabindex="0"><span class="dot ${t.lvl}"></span>${esc(t.text)}</li>`).join("")}</ol></div>`
+    : `<div><h3>Сделать сегодня</h3><p class="note">Ничего срочного.</p></div>`;
+  const body = `<p class="tl">${head}</p><div class="tg">${todo}${col("Остатки", [...stock.slice(0, 4), ...(stock.length > 4 ? [`<li><i>и ещё ${stock.length - 4}</i></li>`] : [])])}${col("Продажи за неделю", sales)}${col("Отзывы и вопросы", reviews)}</div>${g.unavailable.length ? `<p class="note">Нет в сводке: ${esc(g.unavailable.map((u) => `${u.section.toLowerCase()} (${u.reason})`).join("; "))}.</p>` : ""}`;
+  const stale = age >= 2 ? ` · <b class="bad">устарела на ${age} ${plural(age, "день", "дня", "дней")}</b>` : "";
+  return panel("span12 today", "Сегодня", `сводка за ${ruD(g.day)}${stale}`, body);
+}
 
 export function renderPanel(src: PanelSources, builtAt = new Date()): string {
   const s = src.audit?.summary;
@@ -458,6 +499,8 @@ ${rest < 0 ? `<div class="flowmark"><span style="left:${((e.revenue / total) * 1
   if (side) blocks.push(`<div class="p span4">${side}</div>`);
 
   if (!s) blocks.unshift(empty("Аудита ещё нет", "Напишите в чате Claude <b>/audit</b> — через пару минут здесь появятся цифры, графики и план. Посмотреть на выдуманном магазине: <b>/audit демо</b>."));
+  const today = todayBlock(src.digest, D);
+  if (today) blocks.unshift(today);
 
   // Вкладки
   const docs: Record<string, string> = {};
@@ -474,6 +517,8 @@ ${rest < 0 ? `<div class="flowmark"><span style="left:${((e.revenue / total) * 1
       ? docList("office", src.office.parts.map((p) => ({ id: p.id, name: p.name, sub: p.id === "план" ? "итог для вас" : "отчёт роли", av: p.id === "план" ? "★" : p.name[0]!, body: `<div class="p docp"><div class="dh"><h2>${esc(p.name)}</h2><span class="hint">${p.id === "план" ? "директор свёл отчёты ролей" : "отчёт роли"}</span></div>${p.html}</div>` })))
       : empty("Офис ещё не собирался", "Напишите в чате <b>/office</b> — шесть ролей разберут магазин, директор сведёт план. Вопрос можно задать сразу: <b>/office что с остатками</b>."),
   ]);
+  tabs.push(["plan", "Закупка", src.plan ? frame("plan", src.plan.html, "План закупки") : empty("Плана закупки ещё нет", "Напишите в чате <b>/plan</b> — Claude посчитает, что и сколько завезти на 3 месяца с учётом сезона и остатков. На выдуманном магазине: <b>/plan демо</b>."), src.plan?.summary?.urgent?.length]);
+  tabs.push(["niche", "Ниша", src.niche ? frame("niche", src.niche.html, "Ниша") : empty("Нишу ещё не смотрели", "Напишите в чате <b>/niche</b> — Claude найдёт лидеров и новинки в вашей нише с фото, ценами и тем, что из этого стоит пробовать.")]);
   tabs.push(["comp", "Конкуренты", src.competitors ? frame("comp", src.competitors.html, "Конкуренты") : empty("Конкурентов ещё не смотрели", "Напишите в чате <b>/competitors плед флисовый, плед вязаный</b> — Claude откроет поиск WB и сравнит места и цены.")]);
   tabs.push([
     "card", "Карточки",
@@ -663,6 +708,7 @@ iframe{display:block;width:100%;border:0;background:transparent;min-height:400px
 .cl{cursor:pointer;transition:border-color .15s,background .15s}.p.cl:hover,.ag.cl:hover{border-color:var(--c1)}.rw.cl:hover,.pb.cl:hover{background:var(--panel2)}.rw.cl,.pb.cl{border-radius:6px;margin:0 -6px;padding-left:6px;padding-right:6px}
 .plan li.cl{padding:2px 4px;margin-left:-4px;border-radius:6px}.plan li.cl:hover{background:var(--panel2)}.console .ln2.cl:hover{background:var(--panel);border-radius:4px}
 .cl:focus-visible{outline:2px solid var(--c1);outline-offset:2px}
+.tl{margin:0 0 12px;font-size:15px}.tg{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px 24px}.tg h3{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 8px;font-weight:600}.tg ul{list-style:none;margin:0;padding:0;font-size:13px}.tg li{margin:0 0 6px}.tg i{font-style:normal;color:var(--muted)}.tg .plan{padding-left:0;list-style:none}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:1px;background:var(--faint)}.dot.bad{background:var(--bad)}.dot.warn{background:var(--warn)}.dot.ok{background:var(--good)}.hint .bad{color:var(--bad)}
 #scrim{position:fixed;inset:0;background:rgba(20,16,12,.25);opacity:0;pointer-events:none;transition:opacity .2s;z-index:30}#scrim.on{opacity:1;pointer-events:auto}
 #drawer{position:fixed;top:0;right:0;bottom:0;width:min(420px,100vw);background:var(--panel);border-left:1px solid var(--line);z-index:31;transform:translateX(100%);transition:transform .25s ease-out;display:flex;flex-direction:column;visibility:hidden}#drawer.on{transform:none;visibility:visible}
 .dr-h{display:flex;justify-content:space-between;gap:12px;padding:18px 20px 12px;border-bottom:1px solid var(--line)}.dr-t{font-size:18px;font-weight:700;overflow-wrap:anywhere}.dr-s{font-size:12px;color:var(--muted);margin-top:2px}

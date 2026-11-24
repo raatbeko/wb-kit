@@ -9,14 +9,17 @@ import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ENV_PATH, ROOT } from "../mcp/wb/src/env.js";
 
-export const ALLOWED_KEYS = ["WB_API_TOKEN", "ANTHROPIC_API_KEY", "TELEGRAM_BOT_TOKEN"] as const;
+export const ALLOWED_KEYS = ["WB_API_TOKEN", "ANTHROPIC_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"] as const;
 
 export function setKey(content: string, name: string, value: string): string {
   const line = `${name}=${value}`;
   const lines = content.split(/\r?\n/);
   const i = lines.findIndex((l) => l.trimStart().startsWith(`${name}=`));
-  if (i >= 0) lines[i] = line;
-  else lines.splice(lines[lines.length - 1] === "" ? lines.length - 1 : lines.length, 0, line);
+  if (i >= 0) {
+    lines[i] = line;
+    // Дубликаты ниже убираем: при двух строках побеждает последняя, и ключ «пропадёт».
+    for (let j = lines.length - 1; j > i; j--) if (lines[j]!.trimStart().startsWith(`${name}=`)) lines.splice(j, 1);
+  } else lines.splice(lines[lines.length - 1] === "" ? lines.length - 1 : lines.length, 0, line);
   return lines.join("\n");
 }
 

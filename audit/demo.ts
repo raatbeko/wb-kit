@@ -42,6 +42,8 @@ interface DemoProduct {
   descriptionLength: number;
   characteristics: number;
   complaint?: string;
+  /** Остаток на своём складе продавца (FBS). */
+  own?: number;
 }
 
 const P = (
@@ -58,7 +60,7 @@ const P = (
 export const DEMO_PRODUCTS: DemoProduct[] = [
   P(201450001, "PLAID-GREY-150", "Плед флисовый 150×200 серый", "Пледы", 1490, 14, { stock: 120, trend: 1.15 }),
   P(201450002, "PLAID-BEIGE-200", "Плед вязаный 200×220 бежевый", "Пледы", 2890, 7, { stock: 0, trend: 1.05 }), // закончился
-  P(201450003, "PILLOW-50x70", "Подушка 50×70 бамбук", "Подушки", 990, 11, { stock: 60, buyout: 0.9 }),
+  P(201450003, "PILLOW-50x70", "Подушка 50×70 бамбук", "Подушки", 990, 11, { stock: 60, buyout: 0.9, own: 40 }),
   P(201450004, "TOWEL-SET-3", "Набор полотенец 3 шт хлопок", "Полотенца", 1290, 9, { stock: 1400, trend: 0.8 }), // затоварено
   P(201450005, "MUG-CERAMIC-400", "Кружка керамическая 400 мл", "Кружки", 590, 8, { addToCart: 3.1, photos: 3, video: false, descriptionLength: 240, characteristics: 6 }), // слабая карточка
   P(201450006, "SLIPPERS-38-39", "Тапочки домашние меховые", "Тапочки", 790, 7, { buyout: 0.41, rating: 4.1, complaint: "размер" }), // низкий выкуп
@@ -196,9 +198,28 @@ const inDates = (v: unknown, from: string, to: string) => {
   return d >= from && d <= to;
 };
 
-function funnelFor(g: Generated, p: DemoProduct, start: string, end: string) {
+/**
+ * Сезон для истории старше 90 дней (её подменный клиент не генерирует заказами):
+ * тёплые вещи продаются зимой, остальное — ровно. Нужен плану закупки (/plan).
+ */
+const WINTER = new Set(["Пледы", "Одеяла", "Тапочки", "Халаты", "Свечи", "Термосы"]);
+const WINTER_CURVE = [1.3, 1.1, 0.8, 0.6, 0.5, 0.45, 0.45, 0.55, 0.8, 1.2, 1.5, 1.7];
+
+function olderHistory(p: DemoProduct, start: string, end: string, genStart: string) {
+  let orders = 0;
+  for (let t = Date.parse(start); t <= Date.parse(end) && dayStr(t) < genStart; t += DAY) {
+    const f = WINTER.has(p.subject) ? WINTER_CURVE[new Date(t).getUTCMonth()]! : 1;
+    // Детерминированно: дробную часть копим, без случайности.
+    orders += p.perDay * f;
+  }
+  orders = Math.round(orders);
+  return { orders, buyouts: Math.round(orders * p.buyout) };
+}
+
+function funnelFor(g: Generated, p: DemoProduct, start: string, end: string, genStart = "0000") {
   const ord = g.orders.filter((o) => o["nmId"] === p.nmId && inDates(o["date"], start, end));
-  const orderCount = ord.length;
+  const old = olderHistory(p, start, end, genStart);
+  const orderCount = ord.length + old.orders;
   const orderSum = ord.reduce((s, o) => s + Number(o["priceWithDisc"]), 0);
   const cancelCount = ord.filter((o) => o["isCancel"]).length;
   const buy = g.sales.filter((s) => s["nmId"] === p.nmId && String(s["saleID"]).startsWith("S") && inDates(s["date"], start, end));
@@ -206,7 +227,7 @@ function funnelFor(g: Generated, p: DemoProduct, start: string, end: string) {
   const openCount = Math.round(cartCount / (p.addToCart / 100)) + 3;
   const days = (Date.parse(end) - Date.parse(start)) / DAY + 1;
   return {
-    period: { start, end }, openCount, cartCount, orderCount, orderSum, buyoutCount: buy.length,
+    period: { start, end }, openCount, cartCount, orderCount, orderSum, buyoutCount: buy.length + old.buyouts,
     buyoutSum: buy.reduce((s, b) => s + Number(b["priceWithDisc"]), 0), cancelCount, cancelSum: 0,
     avgPrice: orderCount ? Math.round(orderSum / orderCount) : p.price, avgOrdersCountPerDay: Math.round((orderCount / days) * 10) / 10,
     conversions: {
@@ -254,6 +275,8 @@ function financeRows(g: Generated, from: string, to: string): Row[] {
 export function createDemoClient(now = new Date()): WBClient {
   const g = generate(now);
   const today = dayStr(now.getTime());
+  // Заказы демо-магазина сгенерированы за 90 дней; что раньше — досчитывается сезоном.
+  const genStart = dayStr(now.getTime() - 90 * DAY);
   const unixToDay = (v: unknown) => (v ? dayStr(Number(v) * 1000) : undefined);
 
   const get = async (host: string, path: string, query: Record<string, string | undefined> = {}) => {
@@ -315,8 +338,8 @@ export function createDemoClient(now = new Date()): WBClient {
         const offset = Number(body["offset"] ?? 0);
         const limit = Number(body["limit"] ?? 50);
         const products = DEMO_PRODUCTS.slice(offset, offset + limit).map((p) => ({
-          product: { nmId: p.nmId, title: p.title, vendorCode: p.vendorCode, brandName: "Уютный дом", subjectName: p.subject, productRating: p.rating, feedbackRating: p.rating, stocks: { wb: p.stock, mp: 0, balanceSum: p.stock * p.price } },
-          statistic: { selected: funnelFor(g, p, sel.start, sel.end), past: past ? funnelFor(g, p, past.start, past.end) : undefined },
+          product: { nmId: p.nmId, title: p.title, vendorCode: p.vendorCode, brandName: "Уютный дом", subjectName: p.subject, productRating: p.rating, feedbackRating: p.rating, stocks: { wb: p.stock, mp: p.own ?? 0, balanceSum: p.stock * p.price } },
+          statistic: { selected: funnelFor(g, p, sel.start, sel.end, genStart), past: past ? funnelFor(g, p, past.start, past.end, genStart) : undefined },
         }));
         return { data: { products, currency: "RUB" } };
       }
